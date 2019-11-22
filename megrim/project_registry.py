@@ -2,10 +2,12 @@ import datetime
 import json
 import os
 import pytz
+from .accessory_functions import *
 
 
 class project_registry:
     def __init__(self, source):
+        target_dir(source)
         self.path = os.path.join(source, "projects.json")
         self.read()
 

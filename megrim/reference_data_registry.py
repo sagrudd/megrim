@@ -2,10 +2,12 @@ import datetime
 import json
 import os
 import pytz
+from .accessory_functions import *
 
 
 class reference_data_registry:
     def __init__(self, source, filename, key):
+        target_dir(source)
         self.path = os.path.join(source, filename)
         self.keys = key
         self.read()

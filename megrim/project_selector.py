@@ -1,5 +1,6 @@
 import ipywidgets as widgets
 from IPython.display import display, clear_output
+from .accessory_functions import *
 
 from .project_manager import project_manager
 

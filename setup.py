@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 setuptools.setup(
     name='megrim',
-    version='0.1.3.9',
+    version='0.1.5',
     author="Stephen Rudd",
     author_email="stephen.rudd@nanoporetech.com",
     description="A bioinformatics tutorial framework for epi2me-labs",
