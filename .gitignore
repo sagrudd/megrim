@@ -2,3 +2,17 @@
 /megrim.egg-info/
 /.idea/
 /build/
+
+.spyproject/config/workspace.ini
+
+.spyproject/config/vcs.ini
+
+.spyproject/config/encoding.ini
+
+.spyproject/config/defaults/
+
+.spyproject/config/
+
+node_modules/font-awesome/
+
+package-lock.json
