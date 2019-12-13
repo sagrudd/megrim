@@ -16,3 +16,11 @@
 node_modules/font-awesome/
 
 package-lock.json
+
+megrim/TestingScript.py
+
+megrim/x.png
+
+megrim/__pycache__/basic_qc.cpython-37.pyc
+
+megrim/__pycache__/infographic_plots.cpython-37.pyc
