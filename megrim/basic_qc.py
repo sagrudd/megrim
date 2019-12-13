@@ -7,6 +7,8 @@ Created on Wed Dec 11 11:11:57 2019
 """
 
 import logging
+import pandas as pd
+import numpy as np
 from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
 from time import time
@@ -131,6 +133,90 @@ class SequencingSummaryGetChannelMap:
         logging.debug("flowcell_type identified as %s" % platform)  
         return platform
 
+
+    def get_minion_map(self):
+        """
+        The R code is below; straight forward and minimal ...
+        
+        https://wiki/pages/viewpage.action?spaceKey=ELEC&title=Minion+Chip+map
+        
+        blockCalc <- function(i) {
+            m <- matrix(seq(i, i + 63, by = 1), ncol = 8, byrow = TRUE)
+            cbind(m[seq(5, 8, by = 1), ], m[seq(4), rev(seq(8))])
+        }
+        layout <- do.call(rbind, lapply(
+            c(1, 449, 385, 321, 257, 193, 129, 65), blockCalc))
+        # transpose the layout for cleaner presentation ...
+        layout <- t(layout)
+
+        channelMap <- as.data.frame(cbind(channel = as.vector(t(layout)), which(
+        layout == as.vector(layout), arr.ind = TRUE)))
+
+        Returns
+        -------
+        None.
+
+        """
+        def block_calc(i):
+            m = np.arange(i, (i + 64)).reshape((8, 8), order='C')
+            row = np.c_[m[np.arange(4, 8).tolist(),:],
+                        m[np.arange(0, 4).tolist(),][:,np.arange(8)[: :-1]]
+                        ]
+            return row
+        vector = [1, 449, 385, 321, 257, 193, 129, 65]
+        coord_vector = pd.Series(vector).apply(block_calc)  
+        layout = np.vstack(np.stack(coord_vector))
+        coords_df = pd.DataFrame(layout).reset_index().melt(id_vars='index')
+        coords_df.columns = ['row', 'column', 'channel']
+        return coords_df
+    
+    
+    
+    def get_flongle_map(self):
+        """
+        This again derived from the nanopoRe package implemented previously
+        R code contained here for reference
+
+        layout <- matrix(c(seq(1, 12), 0, seq(13, 24), 0, seq(25, 114), 0,
+                           seq(115, 126), 0), ncol = 13, byrow = TRUE)
+        layout <- layout[rev(seq(10)), ]
+        channelMap <- as.data.frame(cbind(channel = as.vector(t(layout)),
+            which(layout == as.vector(layout), arr.ind = TRUE)))
+
+        Returns
+        -------
+        None.
+
+        """
+        layout = np.concatenate([np.arange(1, 13), numpy.array([0]), 
+                                 np.arange(13, 25), numpy.array([0]), 
+                                 np.arange(25, 115), numpy.array([0]), 
+                                 np.arange(115, 127), numpy.array([0])]).reshape(10,13)
+        coords_df = pd.DataFrame(layout).reset_index().melt(id_vars='index')
+        coords_df.columns = ['row', 'column', 'channel']
+        return coords_df
         
     
+    def get_promethion_map(self):
+        """
+        
+        chunk <- function(i) {
+            m <- matrix(seq_len(250), ncol=10, byrow=TRUE)
+            m + i
+        }
+        layout <- do.call(cbind, lapply(seq(from=0, to=2750, by=250), chunk))
+        channelMap <- as.data.frame(cbind(channel = as.vector(t(layout)),
+        which(layout == as.vector(layout), arr.ind = TRUE)))
+
+        Returns
+        -------
+        None.
+
+        """
+        def chunk(i):
+            return np.arange(1,251).reshape(25,10) + i
+        layout = np.vstack(np.stack(pd.Series(np.arange(0, 2751, 250)).apply(chunk)))
+        coords_df = pd.DataFrame(layout).reset_index().melt(id_vars='index')
+        coords_df.columns = ['row', 'column', 'channel']
+        return coords_df
     

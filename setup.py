@@ -13,7 +13,7 @@ setuptools.setup(
     url="https://github.com/sagrudd/megrim",
     packages=setuptools.find_packages(),
     install_requires=['datetime', 'pytz', 'progressbar', 'tqdm', 'ipython', 
-                      'ipywidgets', 'matplotlib'],
+                      'ipywidgets', 'matplotlib', 'pandas', 'numpy'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
