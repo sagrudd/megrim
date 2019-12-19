@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import math
 import sys
+from scipy import stats
 from genome_geometry import GenomeGeometry
 from bisect import bisect_left
 from dask import dataframe as dd
@@ -18,7 +19,7 @@ from dask.diagnostics import ProgressBar
 from time import time
 from infographic_plots import InfographicPlot, InfographicNode
 from bokeh.io import export_png, show
-from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, Text, ColumnDataSource
+from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, Text, Range1d, ColumnDataSource
 from bokeh.plotting import figure
 from palettable.colorbrewer.sequential import Blues_9
 
@@ -404,16 +405,142 @@ class SequenceSummaryHandler:
         return "ThisIsAFilename.png"
         
     
-
-    
-    
-    
-    def plot_q_distribution(self):
-        i = 1
+    def plot_q_distribution(self, bins=30):
+        # this is a plot, much like the one above ...
+        
+        q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
+        q_pass = q_pass.sort_values(ascending=False).reset_index(drop=True)
+        
+        q_fail = pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
+        q_fail = q_fail.sort_values(ascending=False).reset_index(drop=True)
+        
+        boundaries = np.linspace(q_fail.min(), q_pass.max(), num=bins, endpoint=True, retstep=False)
+        indsP = np.digitize(q_pass, boundaries)
+        indsF = np.digitize(q_fail, boundaries)
+        print(indsP)
+        countsP = np.unique(indsP, return_counts=True, return_inverse=True)
+        countsF = np.unique(indsF, return_counts=True, return_inverse=True)
+        
+        dfP = pd.DataFrame({'count_line': np.repeat(0, bins-1), 
+                            'count': np.repeat(0, bins-1), 
+                            'classification': 'passed',
+                            'colour': "#1F78B4",
+                            'left': boundaries[:-1],
+                            'right': boundaries[1:]})
+        dfP.loc[bins-1] = np.array([0, 0, 'passed',"#1F78B4",dfP.right[bins-2],dfP.right[bins-2]+(dfP.right[bins-2]-dfP.left[bins-2])])
+        dfP.loc[countsP[0]-1, 'count'] = countsP[2] 
+        
+        
+        dfF = pd.DataFrame({'count_line': np.repeat(0, bins-1), 
+                            'count': np.repeat(0, bins-1), 
+                            'classification': 'failed',
+                            'colour': "#A6CEE3",
+                            'left': boundaries[:-1],
+                            'right': boundaries[1:]})
+        dfF.loc[bins-1]  = np.array([0, 0, 'failed',"#A6CEE3",dfF.right[bins-2],dfF.right[bins-2]+(dfF.right[bins-2]-dfF.left[bins-2])])
+        dfF.loc[countsF[0]-1, 'count'] = countsF[2] 
+        
+        # not sure why ... python eh ... but some explicit casting of type is
+        # required here to encourage these dataframes to merge
+        dfP = dfP.astype({'count': 'int32', 'count_line': 'int32'})
+        dfF = dfF.astype({'count': 'int32', 'count_line': 'int32'})
+        
+        dfP['count_line'] = dfF['count']
+        dfP['count'] = dfP['count_line']+ dfP['count']
+        
+        dfP = dfP.append(dfF)
+        
+        print(dfP)
+        
+        plot_base = 'count_line'
+        plot_key = 'count'
+        plot_legend = "count (reads)"
+        p = figure(title="Histogram showing distribution of quality values", background_fill_color="lightgrey")
+        p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
+           fill_color='colour', line_color="white", legend_field= 'classification', alpha=0.7)
+        
+        vline = Span(location=7, dimension='height', line_color='green', line_width=2)
+        p.renderers.extend([vline])
+        p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[7],
+                                                                                                          y=[dfP['count'].max()],
+                                    text=['Q-filter'])), 
+                              render_mode='canvas', text_align='left', text_color="green"))   
+        
+        p.y_range.start = 0
+        p.legend.location = "center_right"
+        p.xaxis.axis_label = 'Quality value (Phred)'
+        p.yaxis.axis_label = plot_legend
+        p.yaxis.formatter=NumeralTickFormatter(format="0,0")
+        p.grid.grid_line_color="white"
+        
+        export_png(p, filename="plot4.png")
         return "ThisIsAFilename.png"
         
-    def plot_q_l_density(self):
-        i = 1
+    def plot_q_l_density(self, bins=100, longest_read=6000, highest_q = 15):
+        
+        # a few long reads can skew the figure - shave the data to focus on points of interest
+        
+        #q_boundaries = np.linspace(xy["mean_qscore_template"].min(), xy["mean_qscore_template"].max(), num=bins, endpoint=True, retstep=False)
+        #l_boundaries = np.linspace(xy["sequence_length_template"].min(), xy["sequence_length_template"].max(), num=bins, endpoint=True, retstep=False)
+        geometry = GenomeGeometry(pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+        
+        binned2d = stats.binned_statistic_2d(self.seq_sum['sequence_length_template'], self.seq_sum['mean_qscore_template'], np.repeat(1, len(self.seq_sum)), 'count', bins=[bins,bins], range=[[0, longest_read], [0, highest_q]])
+        # this gives x and y (obligate) and a count ... can we plot this?
+        
+
+        layout = pd.DataFrame(binned2d.statistic)
+        #layout = layout.transpose()
+        layout.columns = binned2d.y_edge[:-1]
+        layout.index = binned2d.x_edge[:-1]
+        
+        layout = layout.reset_index().melt(id_vars='index')
+        layout.columns = ['column', 'row', 'count']
+        layout = layout.fillna(0)
+
+        
+        print(layout)
+
+        #colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
+        colors = Blues_9.hex_colors
+        mapper = LinearColorMapper(palette=colors, low=layout['count'].min(), high=layout['count'].max())
+
+        TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
+
+        p = figure(title="channel activity plot",
+            x_axis_location="above", plot_width=1200, plot_height=800,
+            tools=TOOLS, toolbar_location='below')
+
+        p.title.text_font_size = '18pt'
+
+        p.rect(x="column", y="row", width=longest_read/bins, height=highest_q/bins,
+               source=layout,
+               fill_color={'field': 'count', 'transform': mapper},
+               line_color=None)
+        
+
+        color_bar = ColorBar(color_mapper=mapper, major_label_text_font_size="10pt",
+                     ticker=BasicTicker(desired_num_ticks=len(colors)),
+                     #formatter=PrintfTickFormatter(format="%d%%"),
+                     title="#reads",
+                     label_standoff=6, border_line_color=None, location=(0, 0))
+        p.add_layout(color_bar, 'right')
+        
+        hline = Span(location=7, dimension='width', line_color='green', line_width=2)
+        p.renderers.extend([hline])
+        p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[longest_read],
+                                                                                                          y=[7],
+                                    text=['Q-filter'])), 
+                              render_mode='canvas', text_align='right', text_color="green")) 
+        
+        vline = Span(location=geometry.get_mean_length(), dimension='height', line_color='red', line_width=2)
+        p.renderers.extend([vline])
+        #p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()],
+        #                            y=highest_q,
+        #                            text=['Mean'])), 
+        #                      render_mode='canvas', text_align='right', text_color="red"))
+        
+        #show(p)
+        export_png(p, filename="plot5.png")
         return "ThisIsAFilename.png"
         
     def plot_time_duty(self, interval=0.25):
