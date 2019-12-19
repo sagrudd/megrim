@@ -10,12 +10,16 @@ import logging
 import pandas as pd
 import numpy as np
 import math
+import sys
+from genome_geometry import GenomeGeometry
 from bisect import bisect_left
 from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
 from time import time
 from infographic_plots import InfographicPlot, InfographicNode
-from bokeh.io import export_png
+from bokeh.io import export_png, show
+from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter
+from bokeh.plotting import figure
 from palettable.colorbrewer.sequential import Blues_9
 
 
@@ -116,7 +120,7 @@ class SequenceSummaryHandler:
         
         
         flowcell_node = InfographicNode(legend="flowcell", 
-                                value="FAK85195", 
+                                value=self.get_flowcell_id(), 
                                 graphic='fingerprint')
 
         readcount_node = InfographicNode(legend="Reads produced", 
@@ -175,8 +179,36 @@ class SequenceSummaryHandler:
     
     
     
-    def passed_gauge_plot(self):
-        i = 1
+    def plot_passed_gauge(self):
+        read_count = len(self.seq_sum)
+        passed_read_count = self.seq_sum.passes_filtering.sum().compute()
+        perc_val = passed_read_count / read_count * 100
+        
+        p = figure(plot_width=600, plot_height=400, x_range=(0.25, 1.75), y_range=(0.7, 1.5), toolbar_location=None)
+        
+        start_val = 0
+        middle_val = (math.pi / 100) * (100 - perc_val)
+        end_val = math.pi
+        
+        p.annular_wedge(x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
+                        start_angle=middle_val, end_angle=end_val, color="green", alpha=0.6)
+        
+        p.annular_wedge(x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
+                        start_angle=start_val, end_angle=middle_val, color="orange", alpha=0.6)
+        
+        label = Label(x=1, y=1, text="{:.1f}%".format(perc_val), x_units='data', y_units='data', 
+                      text_align='center', text_font_style='bold', text_font_size='1.5em')
+        legend = Label(x=1, y=0.9, 
+                       text="Percentage of reads passing QC filter", 
+                       x_units='data', y_units='data', 
+                      text_align='center', text_font_size='1.9em')
+        p.add_layout(label)
+        p.add_layout(legend)
+        p.axis.visible = False
+        p.xgrid.visible=False
+        p.ygrid.visible=False
+        show(p)
+        
         return "ThisIsAFilename.png"
 
     def plot_channel_activity(self):
@@ -189,10 +221,6 @@ class SequenceSummaryHandler:
         layout['count'] = layout['count'].astype(int)
         
         print(layout)
-
-        from bokeh.io import show
-        from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar
-        from bokeh.plotting import figure
 
         #colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
         colors = Blues_9.hex_colors
@@ -232,14 +260,138 @@ class SequenceSummaryHandler:
         export_png(p, filename="plot.png")
         return "ThisIsAFilename.png"
     
-    def plot_qual_len_info(self):
-        i = 1
-        return "ThisIsAFilename.png"
+    def library_characteristics_infographic(self):
+        
+        geometry = GenomeGeometry(pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+        longest_read = geometry.get_longest_read()
+        logging.debug("longest_read == %s" % (longest_read))
+        mean_read_length = geometry.get_mean_length()
+        logging.debug("mean_read_length == %s" % (mean_read_length))
+        read_n50_length = geometry.get_n_value(n=50)
+        logging.debug("read_n50_length == %s" % (read_n50_length))
+        passed_mean_q = geometry.calculate_mean_quality(pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute()))
+        logging.debug("passed_mean_q == %s" % (passed_mean_q))
+        failed_mean_q = geometry.calculate_mean_quality(pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template'].compute()))
+        logging.debug("failed_mean_q == %s" % (failed_mean_q))
+        
+        #df$info <- c(passedMeanLength, N50, passedMeanQ, failedMeanQ, prettyNum(max(passedSeqs$sequence_length_template), big.mark=","))
+        #df$key <- c("Mean Read Length (nt)","N50","Mean Read Quality (QV)","Mean Failed QV","Longest Read")
+        #df$icon <- fontawesome(c("fa-bar-chart", "fa-play", "fa-area-chart", "fa-bug", "fa-sort"))
+        
+        mean_read_length_node = InfographicNode(legend="Mean Read Length (nt)", 
+                                value="{:.2f}".format(mean_read_length), 
+                                graphic='map-signs')
+        read_n50_length_node = InfographicNode(legend="N50", 
+                                value="{:,}".format(read_n50_length), 
+                                graphic='bullseye')
+        passed_mean_q_node = InfographicNode(legend="Mean Read Quality (QV)", 
+                                value="{:.2f}".format(passed_mean_q), 
+                                graphic='award')
+        failed_mean_q_node = InfographicNode(legend="Mean Failed QV", 
+                                value="{:.2f}".format(failed_mean_q), 
+                                graphic='bug')        
+        longest_read_node = InfographicNode(legend="Longest Read", 
+                                value="{:,}".format(longest_read), 
+                                graphic='sort')
+        infographic_data = [mean_read_length_node, read_n50_length_node,
+                            passed_mean_q_node, failed_mean_q_node,
+                            longest_read_node]
+        ip = InfographicPlot(infographic_data, rows=1, columns=5)  
+        return ip.plot_infographic() 
     
-    def plot_sequence_length(self, normalised=True, include_failed=True):
-        i = 1
+    
+    def plot_sequence_length(self, normalised=True, include_failed=True, bins=30):        
+        # there are some approaches such as np.histogram; seems to split
+        # data into clear bins; but not sure on how for stacked ranges ...
+        # let's use a few more lines of code and perform manually
+        
+        geometry = GenomeGeometry(pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+        geometryF = GenomeGeometry(pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+        
+        longest_read = geometry.get_longest_read()
+        boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
+        print(boundaries)
+        indsP = np.digitize(geometry.get_lengths(), boundaries)
+        indsF = np.digitize(geometryF.get_lengths(), boundaries)
+        countsP = np.unique(indsP, return_counts=True, return_inverse=True)
+        countsF = np.unique(indsF, return_counts=True, return_inverse=True)
+        print(countsP[1])
+        
+        
+        def count_bases(x, assignments, reads):
+            return reads[assignments==x].sum()
+        
+        chunksP = pd.Series(np.unique(countsP[1]))
+        basesP = chunksP.apply(count_bases, assignments=countsP[1], reads=geometry.get_lengths())
+
+        chunksF = pd.Series(np.unique(countsF[1]))
+        basesF = chunksF.apply(count_bases, assignments=countsF[1], reads=geometryF.get_lengths())
+        
+        # pad the missing values from these ranges 
+        dfP = pd.DataFrame({'bases_line': 0,
+                            'count_line': 0,
+                            'count': np.repeat(0, bins-1), 
+                            'bases': np.repeat(0, bins-1), 
+                            'classification': 'passed',
+                            'colour': "#1F78B4",
+                            'left': boundaries[:-1],
+                            'right': boundaries[1:]})
+        dfP.loc[bins-1] = np.array([0, 0, 0, 0, 'passed',"#1F78B4",dfP.right[bins-2],dfP.right[bins-2]+(dfP.right[bins-2]-dfP.left[bins-2])])
+        dfP.loc[countsP[0]-1, 'count'] = countsP[2] 
+        dfP.loc[countsP[0]-1, 'bases'] = basesP
+        
+        if include_failed:
+            dfF = pd.DataFrame({'bases_line': 0,
+                                'count_line': 0,
+                                'count': np.repeat(0, bins-1), 
+                                'bases': np.repeat(0, bins-1), 
+                                'classification': 'failed',
+                                'colour': "#A6CEE3",
+                                'left': boundaries[:-1],
+                                'right': boundaries[1:]})
+            dfF.loc[bins-1]  = np.array([0, 0, 0, 0, 'failed',"#A6CEE3",dfF.right[bins-2],dfF.right[bins-2]+(dfF.right[bins-2]-dfF.left[bins-2])])
+            dfF.loc[countsF[0]-1, 'count'] = countsF[2] 
+            dfF.loc[countsF[0]-1, 'bases'] = basesF
+            
+            # one challenge here is that bokeh quads do not support stacking ...
+            # this should be managed by self ...
+            dfP['bases_line'] = dfF['bases']
+            dfP['bases'] = dfP['bases_line']+ dfP['bases']
+            dfP['count_line'] = dfF['count']
+            dfP['count'] = dfP['count_line']+ dfP['count']
+            dfP = dfP.append(dfF)
+        
+        print(dfP)
+        
+        plot_base = 'bases_line'
+        plot_key = 'bases'
+        plot_legend = "count (bases)"
+        if not normalised:
+            print("using counts instead of bases!")
+            plot_base = 'count_line'
+            plot_key = 'count'
+            plot_legend = "count (reads)"
+        
+        p = figure(title="Histogram showing read-length distribution", background_fill_color="lightgrey")
+        p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
+           fill_color='colour', line_color="white", legend_field= 'classification')
+        
+        
+        p.y_range.start = 0
+        p.legend.location = "center_right"
+        p.xaxis.axis_label = 'Sequence length (nt)'
+        p.yaxis.axis_label = plot_legend
+        p.yaxis.formatter=NumeralTickFormatter(format="0,0")
+        p.grid.grid_line_color="white"
+        
+        export_png(p, filename="plot3.png")
         return "ThisIsAFilename.png"
         
+    
+
+    
+    
+    
     def plot_q_distribution(self):
         i = 1
         return "ThisIsAFilename.png"
