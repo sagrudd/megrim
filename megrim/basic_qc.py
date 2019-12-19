@@ -18,7 +18,7 @@ from dask.diagnostics import ProgressBar
 from time import time
 from infographic_plots import InfographicPlot, InfographicNode
 from bokeh.io import export_png, show
-from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter
+from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, Text, ColumnDataSource
 from bokeh.plotting import figure
 from palettable.colorbrewer.sequential import Blues_9
 
@@ -300,7 +300,9 @@ class SequenceSummaryHandler:
         return ip.plot_infographic() 
     
     
-    def plot_sequence_length(self, normalised=True, include_failed=True, bins=30):        
+    def plot_sequence_length(self, normalised=True, 
+                             include_failed=True, bins=30, 
+                             annotate_mean=True, annotate_n50=True):        
         # there are some approaches such as np.histogram; seems to split
         # data into clear bins; but not sure on how for stacked ranges ...
         # let's use a few more lines of code and perform manually
@@ -376,7 +378,21 @@ class SequenceSummaryHandler:
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
            fill_color='colour', line_color="white", legend_field= 'classification')
         
-        
+        if annotate_mean:
+            vline = Span(location=geometry.get_mean_length(), dimension='height', line_color='red', line_width=2)
+            p.renderers.extend([vline])
+            p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()],
+                                    y=[dfP['count'].max()],
+                                    text=['Mean'])), 
+                              render_mode='canvas', text_align='right', text_color="red"))
+
+        if annotate_n50:
+            vline = Span(location=geometry.get_n_value(), dimension='height', line_color='orange', line_width=2)
+            p.renderers.extend([vline])
+            p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[geometry.get_n_value()],
+                                    y=[dfP['count'].max()],
+                                    text=['N50'])), 
+                              render_mode='canvas', text_align='left', text_color="orange"))    
         p.y_range.start = 0
         p.legend.location = "center_right"
         p.xaxis.axis_label = 'Sequence length (nt)'
