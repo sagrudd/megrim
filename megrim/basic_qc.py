@@ -248,7 +248,7 @@ class SequenceSummaryHandler:
         if not units in scale.keys():
             raise Exception("{%s} is not a qualified runtime unit ...")
         
-        runtime = math.ceil(self.get_absolute_runtime() / scale[units])        
+        runtime = math.ceil(self.get_absolute_runtime() / scale["hours"])        
         if rounded:
             def take_closest(values, val):
                 pos=bisect_left(values, val)
@@ -257,7 +257,7 @@ class SequenceSummaryHandler:
                 else:
                     return values[pos]
             runtime = take_closest(canonical_runs, runtime)            
-        return runtime
+        return (runtime * scale["hours"]) / scale[units]
     
     
     
@@ -662,8 +662,28 @@ class SequenceSummaryHandler:
         export_png(p, filename="plot5.png")
         return "ThisIsAFilename.png"
         
-    def plot_time_duty(self, interval=0.25):
-        i = 1
+    def plot_time_duty(self, interval_mins=15):
+        
+        # seq_sum['start_time'] is measured in seconds
+        boundaries = np.linspace(0, self.get_runtime(units='hours'), 
+                                 num=self.get_runtime(units='hours')*60/interval_mins+1, 
+                                 endpoint=True, retstep=False)
+        assignments = np.digitize(self.seq_sum['start_time'].compute() / 60 / 60, boundaries)
+        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+        fail_assignments = np.digitize(self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+        time_counts = np.unique(assignments, return_counts=True, return_inverse=True)
+        pass_time_counts = np.unique(pass_assignments, return_counts=True, return_inverse=True)
+        fail_time_counts = np.unique(fail_assignments, return_counts=True, return_inverse=True)
+        
+        plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
+                  y_axis_label='Sequence reads (n)', background_fill_color="lightgrey")
+        
+        plot.line(boundaries[:-1], time_counts[2], line_width=2, line_color='black', legend_label='Total reads')
+        plot.line(boundaries[:-1], pass_time_counts[2], line_width=2, line_color='#1F78B4', legend_label='Passed reads')
+        plot.line(boundaries[:-1], fail_time_counts[2], line_width=2, line_color='#A6CEE3', legend_label='Failed reads')
+        
+        
+        export_png(plot, filename="plot6.png")
         return "ThisIsAFilename.png"
         
     def plot_cumulative_bases(self, interval=0.25, milestones=[0.5, 0.9]):
