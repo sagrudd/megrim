@@ -11,6 +11,12 @@ import pandas as pd
 import numpy as np
 import math
 import sys
+import re
+import os
+import tempfile
+import atexit
+import matplotlib as mpl
+from colour import Color
 from scipy import stats
 from genome_geometry import GenomeGeometry
 from bisect import bisect_left
@@ -20,6 +26,7 @@ from time import time
 from infographic_plots import InfographicPlot, InfographicNode
 from bokeh.io import export_png, show
 from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, Text, Range1d, ColumnDataSource
+from bokeh.palettes import Inferno256
 from bokeh.plotting import figure
 from palettable.colorbrewer.sequential import Blues_9
 
@@ -47,7 +54,51 @@ class SequenceSummaryHandler:
     
     def __init__(self, target_file):
         self.target_file = target_file
+        self.temp_files = []
+        atexit.register(self.cleanup)
         self._import_data()
+        
+    def cleanup(self):
+        print("SequenceSummaryHandler exit called")
+        for tfile in self.temp_files:
+            print("unlinking ", tfile)
+            os.remove(tfile)
+        
+    def _recover_funky_seqsum(self):
+        print("Creating one temporary file...")
+        fd, path = tempfile.mkstemp() 
+        line_no = 0
+        with open(path, 'w') as f:
+            print("Created file is:", fd) 
+            print("Name of the file is:", path) 
+            #print("tempdir:", tempfile.gettempdir())
+            with open(self.target_file) as origin_file:
+                for line in origin_file:
+                    header = re.findall(r'filename', line)
+                    if header:
+                        if line_no == 0:
+                            f.write(line)
+                    else:
+                        f.write(line)
+                    if line_no == 0:
+                        line_no += 1
+            print("Closing the temp file")
+            os.close(fd)
+            self.temp_files.append(path)
+            return path
+        
+        
+    def _load_seqsum(self, file=None):
+        if file is None:
+            file = self.target_file
+        self.seq_sum = dd.read_csv(
+            file, 
+            delimiter='\t',
+            blocksize=64000000
+        )
+        # slice out the head entries for further functionality
+        self.seq_sum_head = self.seq_sum.head()
+        
         
     def _import_data(self):
         """
@@ -55,20 +106,33 @@ class SequenceSummaryHandler:
         the reduced contents into memory - a DASK dataframe is used to
         allow for the scaling to large PromethION runs (or equivalent)
 
+        There is a possibility of duplicate header lines; these will btreak
+        the dask import
+        
+        grep can be used to identify the line numbers - this can take a while
+        on a promethion flowcell
+
         Returns
         -------
         None.
 
         """
-        self.seq_sum = dd.read_csv(
-            self.target_file, 
-            delimiter='\t',
-            blocksize=64000000,
-        )
-        
-        # slice out the head entries for further functionality
-        self.seq_sum_head = self.seq_sum.head()
-        
+    
+        try:
+            self._load_seqsum()
+        except ValueError as verr:
+            print("ValueError error: {0}".format(verr))
+            print("ERROR - Loading native file did not work ...")
+            
+            
+            print("Stripping duplicate rows from filename ...")
+            temp = self._recover_funky_seqsum()
+            self._load_seqsum(temp)
+            
+            
+        except:
+            print("ERROR - this is an unexpected edge case ...")
+            sys.exit(0)
         # start excluding dask columns that are not of core interest
         keep = ['channel', 'start_time', 'duration', 'num_events', 
                 'sequence_length_template', 'mean_qscore_template', 
@@ -96,9 +160,26 @@ class SequenceSummaryHandler:
             DESCRIPTION.
 
         """
-        fastq_id = str(self.seq_sum_head['filename_fastq'][0]).split("_")
+        
+        columns = list(self.seq_sum_head.columns)
+        target = None
+        if "filename_fastq" in columns:
+            target = "filename_fastq"
+        elif "filename" in columns:
+            target = "filename"
+        else:
+            print("ERROR - there is not a suitable filename column")
+            sys.exit(0)
+        
+        fastq_id = str(self.seq_sum_head[target][0]).split("_")
         if len(fastq_id) == 3:
             fastq_id = fastq_id[0]
+        elif len(fastq_id) == 15:
+            fastq_id = fastq_id[2]
+        else:
+            print(fastq_id)
+            print("ERROR - unexpected dimensions ...")
+            sys.exit(0)
         logging.debug("flowcell read as [%s]" % fastq_id)
         #print(("_", fastq_id))
         return fastq_id
@@ -221,7 +302,7 @@ class SequenceSummaryHandler:
         layout['column'] = layout['column'].astype(str)
         layout['count'] = layout['count'].astype(int)
         
-        print(layout)
+        logging.debug(layout)
 
         #colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
         colors = Blues_9.hex_colors
@@ -476,15 +557,30 @@ class SequenceSummaryHandler:
         export_png(p, filename="plot4.png")
         return "ThisIsAFilename.png"
         
-    def plot_q_l_density(self, bins=100, longest_read=6000, highest_q = 15):
-        
+    def plot_q_l_density(self, xbins=100, ybins=100, longest_read=6000, 
+                         highest_q = 15, plot_depth_threshold=100):
+
         # a few long reads can skew the figure - shave the data to focus on points of interest
         
-        #q_boundaries = np.linspace(xy["mean_qscore_template"].min(), xy["mean_qscore_template"].max(), num=bins, endpoint=True, retstep=False)
-        #l_boundaries = np.linspace(xy["sequence_length_template"].min(), xy["sequence_length_template"].max(), num=bins, endpoint=True, retstep=False)
+        q_boundaries = np.linspace(2, highest_q, num=ybins, endpoint=True, retstep=False)
+        #l_boundaries = np.linspace(np.log10(100), np.log10(longest_read), num=xbins, endpoint=True)
+        l_boundaries = np.logspace(np.log10(100), np.log10(longest_read), num=xbins)
+        
+        print(q_boundaries)
+        
+        print(l_boundaries)
+        
         geometry = GenomeGeometry(pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
         
-        binned2d = stats.binned_statistic_2d(self.seq_sum['sequence_length_template'], self.seq_sum['mean_qscore_template'], np.repeat(1, len(self.seq_sum)), 'count', bins=[bins,bins], range=[[0, longest_read], [0, highest_q]])
+        # are there NaN in the dataset? There shouldn't be ...
+        
+        
+        binned2d = stats.binned_statistic_2d(
+            self.seq_sum['sequence_length_template'].compute(), 
+            self.seq_sum['mean_qscore_template'].compute(), 
+            np.repeat(1, len(self.seq_sum)), 'count', 
+            bins=[l_boundaries,q_boundaries]
+            )
         # this gives x and y (obligate) and a count ... can we plot this?
         
 
@@ -497,29 +593,50 @@ class SequenceSummaryHandler:
         layout.columns = ['column', 'row', 'count']
         layout = layout.fillna(0)
 
+        # with the log scale we need a width column ...
+        layout["width"]=layout["column"]/10
+        layout["alpha"]=1
+        layout.loc[layout["count"]<=plot_depth_threshold, 'alpha'] = 0
+        
+        print(layout)
         
         print(layout)
 
+        colors = []        
+        def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+            c1=np.array(mpl.colors.to_rgb(c1))
+            c2=np.array(mpl.colors.to_rgb(c2))
+            return mpl.colors.to_hex((1-mix)*c1 + mix*c2)
+
+        c1='#A6CEE3' #blue
+        c2='blue' #green
+        n=75
+
+        for x in range(n+1):
+            colors.append(colorFader(c1,c2,x/n)) 
+
         #colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
-        colors = Blues_9.hex_colors
-        mapper = LinearColorMapper(palette=colors, low=layout['count'].min(), high=layout['count'].max())
+        #colors = Inferno256
+        mapper = LinearColorMapper(palette=colors, low=layout['count'].min()+1, high=layout['count'].max())
 
         TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
-        p = figure(title="channel activity plot",
-            x_axis_location="above", plot_width=1200, plot_height=800,
-            tools=TOOLS, toolbar_location='below')
+        p = figure(title="Density plot showing relationship between quality and read length",
+            x_axis_location="below", plot_width=1200, plot_height=800,
+            tools=TOOLS, toolbar_location='below', x_axis_type="log",
+            background_fill_color="lightgrey")
 
         p.title.text_font_size = '18pt'
 
-        p.rect(x="column", y="row", width=longest_read/bins, height=highest_q/bins,
+        p.rect(x="column", y="row", width="width", height=highest_q/ybins,
                source=layout,
                fill_color={'field': 'count', 'transform': mapper},
-               line_color=None)
+               line_color=None,
+               fill_alpha="alpha")
         
 
         color_bar = ColorBar(color_mapper=mapper, major_label_text_font_size="10pt",
-                     ticker=BasicTicker(desired_num_ticks=len(colors)),
+                     ticker=BasicTicker(desired_num_ticks=10),
                      #formatter=PrintfTickFormatter(format="%d%%"),
                      title="#reads",
                      label_standoff=6, border_line_color=None, location=(0, 0))
@@ -538,7 +655,9 @@ class SequenceSummaryHandler:
         #                            y=highest_q,
         #                            text=['Mean'])), 
         #                      render_mode='canvas', text_align='right', text_color="red"))
-        
+        p.xaxis.formatter=NumeralTickFormatter(format="0,0")
+        p.xaxis.axis_label = 'Read length (nt)'
+        p.yaxis.axis_label = 'Phred score (Q)'
         #show(p)
         export_png(p, filename="plot5.png")
         return "ThisIsAFilename.png"
@@ -610,7 +729,8 @@ class SequencingSummaryGetChannelMap:
         """
 
         platform = "MinION"
-        max_channel = self.seq_sum['channel'].max()
+        max_channel = self.seq_sum['channel'].max().compute()
+        logging.debug("MaxChannel == ", max_channel)
 
         if max_channel < 130:
             # this is likely to be a Flongle ...
