@@ -662,7 +662,7 @@ class SequenceSummaryHandler:
         export_png(p, filename="plot5.png")
         return "ThisIsAFilename.png"
         
-    def plot_time_duty(self, interval_mins=15):
+    def plot_time_duty_reads(self, interval_mins=15):
         
         # seq_sum['start_time'] is measured in seconds
         boundaries = np.linspace(0, self.get_runtime(units='hours'), 
@@ -682,9 +682,60 @@ class SequenceSummaryHandler:
         plot.line(boundaries[:-1], pass_time_counts[2], line_width=2, line_color='#1F78B4', legend_label='Passed reads')
         plot.line(boundaries[:-1], fail_time_counts[2], line_width=2, line_color='#A6CEE3', legend_label='Failed reads')
         
-        
         export_png(plot, filename="plot6.png")
         return "ThisIsAFilename.png"
+    
+    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases"):
+        """
+        This method is much like the plot_time_duty_reads but aggregates the
+        sequenced bases into these temporal bins
+
+        Parameters
+        ----------
+        interval_mins : TYPE, optional
+            DESCRIPTION. The default is 15.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # validate the scale ...
+        scaleVal = 1
+        if scale == "Gigabases":
+            scaleVal = 1e9
+        elif scale == "Megabases":
+            scaleVal = 1e6
+        elif scale == "Kilobases":
+            scaleVal = 1e3
+        
+        boundaries = np.linspace(0, self.get_runtime(units='hours'), 
+                                 num=self.get_runtime(units='hours')*60/interval_mins+1, 
+                                 endpoint=True, retstep=False)
+        assignments = np.digitize(self.seq_sum['start_time'].compute() / 60 / 60, boundaries)
+        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+        fail_assignments = np.digitize(self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+        
+        bases_by_time = np.array([self.seq_sum['sequence_length_template'].compute()[assignments == i].sum() for i in range(1, len(boundaries))])
+        passed_bases_by_time = np.array([self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()[pass_assignments == i].sum() for i in range(1, len(boundaries))])
+        failed_bases_by_time = np.array([self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template'].compute()[fail_assignments == i].sum() for i in range(1, len(boundaries))])
+    
+        bases_by_time = bases_by_time / scaleVal
+        passed_bases_by_time = passed_bases_by_time / scaleVal
+        failed_bases_by_time = failed_bases_by_time / scaleVal
+    
+        plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
+                  y_axis_label='Sequence %s (n)'%(scale), background_fill_color="lightgrey")
+        
+        plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black', legend_label='bases across all reads')
+        plot.line(boundaries[:-1], passed_bases_by_time, line_width=2, line_color='#1F78B4', legend_label='bases from passed reads')
+        plot.line(boundaries[:-1], failed_bases_by_time, line_width=2, line_color='#A6CEE3', legend_label='bases from failed reads')
+        
+        export_png(plot, filename="plot7.png")
+        return "ThisIsAFilename.png"
+        
+    
         
     def plot_cumulative_bases(self, interval=0.25, milestones=[0.5, 0.9]):
         i = 1
