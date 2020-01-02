@@ -662,7 +662,7 @@ class SequenceSummaryHandler:
         export_png(p, filename="plot5.png")
         return "ThisIsAFilename.png"
         
-    def plot_time_duty_reads(self, interval_mins=15):
+    def plot_time_duty_reads(self, interval_mins=15, cumulative=True):
         
         # seq_sum['start_time'] is measured in seconds
         boundaries = np.linspace(0, self.get_runtime(units='hours'), 
@@ -675,17 +675,33 @@ class SequenceSummaryHandler:
         pass_time_counts = np.unique(pass_assignments, return_counts=True, return_inverse=True)
         fail_time_counts = np.unique(fail_assignments, return_counts=True, return_inverse=True)
         
+        # there is a need for some additional logic here ... the np.unique
+        # only returns the count for the assignments prepared by np.digitize
+        # - if we have a run that produces no reads in a given time window,
+        # the counts will go out of sync ...
+        corrected_time_counts = np.repeat(0, len(boundaries))
+        corrected_time_counts[time_counts[0]] = time_counts[2]
+        corrected_pass_time_counts = np.repeat(0, len(boundaries))
+        corrected_pass_time_counts[pass_time_counts[0]] = pass_time_counts[2]
+        corrected_fail_time_counts = np.repeat(0, len(boundaries))
+        corrected_fail_time_counts[fail_time_counts[0]] = fail_time_counts[2]
+        
+        if cumulative:
+            corrected_time_counts = np.cumsum(corrected_time_counts)
+            corrected_pass_time_counts = np.cumsum(corrected_pass_time_counts)
+            corrected_fail_time_counts = np.cumsum(corrected_fail_time_counts)
+        
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                   y_axis_label='Sequence reads (n)', background_fill_color="lightgrey")
         
-        plot.line(boundaries[:-1], time_counts[2], line_width=2, line_color='black', legend_label='Total reads')
-        plot.line(boundaries[:-1], pass_time_counts[2], line_width=2, line_color='#1F78B4', legend_label='Passed reads')
-        plot.line(boundaries[:-1], fail_time_counts[2], line_width=2, line_color='#A6CEE3', legend_label='Failed reads')
+        plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black', legend_label='Total reads')
+        plot.line(boundaries[:-1], corrected_pass_time_counts[1:], line_width=2, line_color='#1F78B4', legend_label='Passed reads')
+        plot.line(boundaries[:-1], corrected_fail_time_counts[1:], line_width=2, line_color='#A6CEE3', legend_label='Failed reads')
         
         export_png(plot, filename="plot6.png")
         return "ThisIsAFilename.png"
     
-    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases"):
+    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True):
         """
         This method is much like the plot_time_duty_reads but aggregates the
         sequenced bases into these temporal bins
@@ -724,6 +740,11 @@ class SequenceSummaryHandler:
         bases_by_time = bases_by_time / scaleVal
         passed_bases_by_time = passed_bases_by_time / scaleVal
         failed_bases_by_time = failed_bases_by_time / scaleVal
+        
+        if cumulative:
+            bases_by_time = np.cumsum(bases_by_time)
+            passed_bases_by_time = np.cumsum(passed_bases_by_time)
+            failed_bases_by_time = np.cumsum(failed_bases_by_time)
     
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                   y_axis_label='Sequence %s (n)'%(scale), background_fill_color="lightgrey")
