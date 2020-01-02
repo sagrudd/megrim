@@ -810,8 +810,25 @@ class SequenceSummaryHandler:
         
         return "ThisIsAFilename.png"
     
-    def plot_functional_channels(self, interval=1):
-        i = 1
+    def plot_functional_channels(self, interval_mins=60):
+        print("plotting active channel count ...")
+        boundaries = np.linspace(0, self.get_runtime(units='hours'), 
+                                 num=self.get_runtime(units='hours')*60/interval_mins+1, 
+                                 endpoint=True, retstep=False)  
+        
+        sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
+        sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
+        sdata['group'] = sdata['group'].astype('category')
+        groups = sdata.groupby('group')
+        
+        channel_count = groups['channel'].nunique()
+        time_chunks = np.unique(sdata['group'])
+        
+        plot = figure(title='Plot showing number of observed channels against time', x_axis_label='Time (hours)',
+                  y_axis_label='Number of active channels (n)))', background_fill_color="lightgrey")
+        
+        plot.step(time_chunks, channel_count, line_width=2, mode="before")
+        export_png(plot, filename="plot9.png")
         return "ThisIsAFilename.png"
     
     def is_barcoded_dataset(self):
