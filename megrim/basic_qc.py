@@ -29,6 +29,7 @@ from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, Co
 from bokeh.palettes import Inferno256
 from bokeh.plotting import figure
 from palettable.colorbrewer.sequential import Blues_9
+from scipy.optimize import minimize
 
 
 class Timer():
@@ -701,7 +702,7 @@ class SequenceSummaryHandler:
         export_png(plot, filename="plot6.png")
         return "ThisIsAFilename.png"
     
-    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True):
+    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9]):
         """
         This method is much like the plot_time_duty_reads but aggregates the
         sequenced bases into these temporal bins
@@ -741,6 +742,12 @@ class SequenceSummaryHandler:
         passed_bases_by_time = passed_bases_by_time / scaleVal
         failed_bases_by_time = failed_bases_by_time / scaleVal
         
+        # in the R versions of the BasicQC stats::optimize was used to 
+        # identify T50 and T90 points on the plot ... - will endeavour to
+        # implement a SciPy equivalent
+        
+        
+        
         if cumulative:
             bases_by_time = np.cumsum(bases_by_time)
             passed_bases_by_time = np.cumsum(passed_bases_by_time)
@@ -753,18 +760,33 @@ class SequenceSummaryHandler:
         plot.line(boundaries[:-1], passed_bases_by_time, line_width=2, line_color='#1F78B4', legend_label='bases from passed reads')
         plot.line(boundaries[:-1], failed_bases_by_time, line_width=2, line_color='#A6CEE3', legend_label='bases from failed reads')
         
+        if cumulative:
+            for milestone in milestones:
+                cdata = self.get_sequence_base_point(fraction=milestone, interval_mins=interval_mins)
+                times = cdata[1]
+                bases = cdata[0] / scaleVal
+                legend = "T{:.0f}".format(milestone * 100)
+                plot.line([0, times, times], [bases, bases, 0], line_width=2, line_color='red')
+                #plot.text(x=times, y=bases, text=legend, text_baseline="middle", text_align="left")
+                plot.add_layout(Label(x=times, y=bases, text=legend, text_color='red'))
+                plot.legend.location = "bottom_right"
         export_png(plot, filename="plot7.png")
         return "ThisIsAFilename.png"
         
     
+    def get_sequence_base_point(self, fraction=0.5, interval_mins=5):
         
-    def plot_cumulative_bases(self, interval=0.25, milestones=[0.5, 0.9]):
-        i = 1
-        return "ThisIsAFilename.png"
+        # using numpy interpolaten to calculate intersect ...
         
-    def plot_cumulative_reads(self, interval=0.25, milestones=[0.5]):
-        i = 1
-        return "ThisIsAFilename.png"
+        boundaries = np.linspace(0, self.get_runtime(units='hours'), 
+                                 num=self.get_runtime(units='hours')*60/interval_mins+1, 
+                                 endpoint=True, retstep=False)
+        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+        passed_bases_by_time = np.array([self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()[pass_assignments == i].sum() for i in range(1, len(boundaries))])
+        target_value = passed_bases_by_time.sum() * fraction
+        return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
+    
+    
     
     def plot_translocation_speed(self, interval=1):
         i = 1
