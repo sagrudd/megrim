@@ -16,7 +16,6 @@ import os
 import tempfile
 import atexit
 import matplotlib as mpl
-from colour import Color
 from scipy import stats
 from genome_geometry import GenomeGeometry
 from bisect import bisect_left
@@ -25,11 +24,9 @@ from dask.diagnostics import ProgressBar
 from time import time
 from infographic_plots import InfographicPlot, InfographicNode
 from bokeh.io import export_png, show
-from bokeh.models import LinearColorMapper, BasicTicker, PrintfTickFormatter, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, Text, Range1d, ColumnDataSource
-from bokeh.palettes import Inferno256
+from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, ColumnDataSource
 from bokeh.plotting import figure
 from palettable.colorbrewer.sequential import Blues_9
-from scipy.optimize import minimize
 
 
 class Timer():
@@ -742,12 +739,6 @@ class SequenceSummaryHandler:
         passed_bases_by_time = passed_bases_by_time / scaleVal
         failed_bases_by_time = failed_bases_by_time / scaleVal
         
-        # in the R versions of the BasicQC stats::optimize was used to 
-        # identify T50 and T90 points on the plot ... - will endeavour to
-        # implement a SciPy equivalent
-        
-        
-        
         if cumulative:
             bases_by_time = np.cumsum(bases_by_time)
             passed_bases_by_time = np.cumsum(passed_bases_by_time)
@@ -775,9 +766,7 @@ class SequenceSummaryHandler:
         
     
     def get_sequence_base_point(self, fraction=0.5, interval_mins=5):
-        
-        # using numpy interpolaten to calculate intersect ...
-        
+        # using numpy interpolate to calculate intersect ...
         boundaries = np.linspace(0, self.get_runtime(units='hours'), 
                                  num=self.get_runtime(units='hours')*60/interval_mins+1, 
                                  endpoint=True, retstep=False)
@@ -787,9 +776,38 @@ class SequenceSummaryHandler:
         return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
     
     
-    
-    def plot_translocation_speed(self, interval=1):
-        i = 1
+    def plot_translocation_speed(self, interval_mins=60):
+        print("plotting translocation speed ...")
+        boundaries = np.linspace(0, self.get_runtime(units='hours'), 
+                                 num=self.get_runtime(units='hours')*60/interval_mins+1, 
+                                 endpoint=True, retstep=False)  
+        
+        sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
+        sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
+        sdata['group'] = sdata['group'].astype('category')
+        sdata['rate'] = sdata['sequence_length_template'] / sdata['duration']
+        
+        groups = sdata.groupby('group')
+        q1 = groups['rate'].quantile(q=0.25)
+        q2 = groups['rate'].quantile(q=0.5)
+        q3 = groups['rate'].quantile(q=0.75)
+        iqr = q3 - q1
+        upper = q3 + 1.5*iqr
+        lower = q1 - 1.5*iqr
+        
+        plot = figure(title='Plot showing sequencing rate against time', x_axis_label='Time (hours)',
+                  y_axis_label='Sequencing rate (bases/s)', background_fill_color="lightgrey")
+        
+        plot.segment(np.unique(sdata['group']), upper, np.unique(sdata['group']), q3, line_color="black")
+        plot.segment(np.unique(sdata['group']), lower, np.unique(sdata['group']), q1, line_color="black")
+        plot.vbar(np.unique(sdata['group']), 0.7, q2, q3, fill_color="#E08E79", line_color="black")
+        plot.vbar(np.unique(sdata['group']), 0.7, q1, q2, fill_color="#3B8686", line_color="black")
+        
+        plot.rect(np.unique(sdata['group']), lower, 0.2, 0.01, line_color="black")
+        plot.rect(np.unique(sdata['group']), upper, 0.2, 0.01, line_color="black")
+        
+        export_png(plot, filename="plot8.png")
+        
         return "ThisIsAFilename.png"
     
     def plot_functional_channels(self, interval=1):
