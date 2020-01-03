@@ -11,6 +11,8 @@ from pysam import FastaFile
 import pyranges as pr
 import numpy as np
 import pandas as pd
+from environment import Flounder
+from tqdm import tqdm
 
 class ReferenceGenome:
     
@@ -18,6 +20,12 @@ class ReferenceGenome:
         self.fasta = FastaFile(filename=referenceFasta)
         self.allowed = []
         self.skipped = []
+        try:
+            globals()['flounder']
+        except KeyError:
+            print("flounder environment not yet available ..")
+            global flounder
+            flounder = Flounder()
         
     def info(self):
         print(self.fasta.is_open())
@@ -70,36 +78,36 @@ class ReferenceGenome:
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
     
-    def get_tiled_mean_coverage(self, bam_ranges, tile_size=100):
+    def get_tiled_mean_coverage(self, bam_ranges, bam_rle, tile_size=100):
         tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
         print(tiled_coverage)
-        count = 0
-        for row in tiled_coverage.df.itertuples():
+        meanList = []
+        for row in tqdm(tiled_coverage.df.itertuples(), total=tiled_coverage.df.shape[0]):
             n = row.NumberOverlaps
             if n > 0:
-                count +=1
-                print(row)
+                #print(row)
                 chromosome = row.Chromosome
                 start = row.Start
                 end = row.End
                 
-                atomic_range = pr.PyRanges(chromosomes=[chromosome], starts=[start], ends=[end])
-                print(atomic_range)
+                #atomic_range = pr.PyRanges(chromosomes=[chromosome], starts=[start], ends=[end])
+                #print(atomic_range)
                 # look for overlapping bam_ranges entries ...
                 #bam_overlap = bam_ranges.set_intersect(atomic_range)
-                bam_overlap = atomic_range.intersect(bam_ranges)
-                print(bam_overlap)
-                rle = bam_overlap.to_rle(strand=False)[chromosome][start:end]
+                #bam_overlap = atomic_range.intersect(bam_ranges)
+                #print(bam_overlap)
+                rle = bam_rle[chromosome][start:end]
                 
-                print(rle)
+                #print(rle)
                 mean = pd.Series(rle.values).repeat(rle.runs).mean()
-                stddev = pd.Series(rle.values).repeat(rle.runs).std()
-                print("\tmean=%s: std=%s" % (mean, stddev))
-                
-                
-            
-                
-            if count > 20:
-                break
+                #stddev = pd.Series(rle.values).repeat(rle.runs).std()
+                #print("\tmean=%s: std=%s" % (mean, stddev))
+                meanList.append(mean)
+            else:
+                meanList.append(0)
+            #print(len(meanList))
+        #tiled_coverage.mean_coverage = meanList
+        #print(tiled_coverage)
+        return meanList
             
         

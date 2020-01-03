@@ -43,8 +43,11 @@ bam = BamHandler("/Users/srudd/Desktop/cas9_FAK76554.bam")
 #print(coverage_data)
 #print(coverage_data.NumberOverlaps)
 
-tiled_coverage = ref.get_tiled_mean_coverage(bam_ranges=bam.get_bam_ranges(),
-                                        tile_size=1000)
+tiled_coverage = ref.get_tiled_coverage(bam.get_bam_ranges(), 1000)
+
+tiled_coverage_means = ref.get_tiled_mean_coverage(bam_ranges=bam.get_bam_ranges(),
+                                             bam_rle=bam.get_bam_coverage(),
+                                             tile_size=1000)
 #tiled_coverage = tiled_coverage[tiled_coverage.NumberOverlaps > 0]
 #print(tiled_coverage)
 #print(tiled_coverage.NumberOverlaps)
