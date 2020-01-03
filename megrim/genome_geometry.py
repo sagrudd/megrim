@@ -89,7 +89,7 @@ class BedHandler:
         # there may be edge exceptions where End coordinate drops off chromo.
         
         merged = pr.concat([upstream, downstream])
-        return merged
+        return pr.gf.genome_bounds(merged, self.ref.get_reference_ranges(), clip=True)
     
     def get_untargeted_ranges(self):
         whole_genome_ranges = self.ref.get_reference_ranges()
@@ -99,8 +99,9 @@ class BedHandler:
         target_proximal_ranges.End += self.get_target_proximity() + 1
         # there is a possibility for edge cases where boundaries of
         # target_proximal_ranges extend beyond the limits of the chromosome
-        
-        return whole_genome_ranges.subtract(target_proximal_ranges)
+        untargeted = whole_genome_ranges.subtract(target_proximal_ranges)
+        return pr.gf.genome_bounds(untargeted, self.ref.get_reference_ranges(), clip=True)
+
     
 
     
@@ -110,4 +111,12 @@ class BamHandler:
     def __init__(self, bam):
         self.bam = bam
 
+    def get_bam_ranges(self):
+        return pr.read_bam(self.bam)
+    
+    def get_bam_coverage(self):
+        return self.get_bam_ranges().to_rle(strand=False)
+
+    
+    
         

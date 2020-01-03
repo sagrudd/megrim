@@ -62,3 +62,10 @@ class ReferenceGenome:
             
     def get_skipped(self):
         print(" ".join(self.skipped))
+        
+    def get_tiled_genome(self, tile_size=100):
+        return pr.gf.tile_genome(self.get_reference_ranges(), tile_size, tile_last=False)
+    
+    def get_tiled_coverage(self, bam_ranges, tile_size=100):
+        return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
+        
