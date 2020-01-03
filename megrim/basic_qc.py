@@ -597,8 +597,6 @@ class SequenceSummaryHandler:
         layout.loc[layout["count"]<=plot_depth_threshold, 'alpha'] = 0
         
         print(layout)
-        
-        print(layout)
 
         colors = []        
         def colorFader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
@@ -832,6 +830,20 @@ class SequenceSummaryHandler:
         return "ThisIsAFilename.png"
     
     def is_barcoded_dataset(self):
+        """
+        There are a couple of different ways that we need to consider for
+        barcode context - has the dataset been demiultiplexed at time of
+        basecalling within e.g. Guppy - or as a downstream process
+        
+        key information relied upon here is the barcode field in the 
+        sequencing summary file ...
+
+        Returns
+        -------
+        bool
+            DESCRIPTION.
+
+        """
         return False
     
     def merge_barcode_summary(self, barcode_summary_file):
