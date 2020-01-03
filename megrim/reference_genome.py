@@ -10,6 +10,7 @@ Created on Thu Jan  2 16:52:28 2020
 from pysam import FastaFile
 import pyranges as pr
 import numpy as np
+import pandas as pd
 
 class ReferenceGenome:
     
@@ -68,4 +69,37 @@ class ReferenceGenome:
     
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
+    
+    def get_tiled_mean_coverage(self, bam_ranges, tile_size=100):
+        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
+        print(tiled_coverage)
+        count = 0
+        for row in tiled_coverage.df.itertuples():
+            n = row.NumberOverlaps
+            if n > 0:
+                count +=1
+                print(row)
+                chromosome = row.Chromosome
+                start = row.Start
+                end = row.End
+                
+                atomic_range = pr.PyRanges(chromosomes=[chromosome], starts=[start], ends=[end])
+                print(atomic_range)
+                # look for overlapping bam_ranges entries ...
+                #bam_overlap = bam_ranges.set_intersect(atomic_range)
+                bam_overlap = atomic_range.intersect(bam_ranges)
+                print(bam_overlap)
+                rle = bam_overlap.to_rle(strand=False)[chromosome][start:end]
+                
+                print(rle)
+                mean = pd.Series(rle.values).repeat(rle.runs).mean()
+                stddev = pd.Series(rle.values).repeat(rle.runs).std()
+                print("\tmean=%s: std=%s" % (mean, stddev))
+                
+                
+            
+                
+            if count > 20:
+                break
+            
         
