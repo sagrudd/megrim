@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from environment import Flounder
 from tqdm import tqdm
+#from tqdm.auto import tqdm
 
 class ReferenceGenome:
     
@@ -90,24 +91,40 @@ class ReferenceGenome:
                 start = row.Start
                 end = row.End
                 
-                #atomic_range = pr.PyRanges(chromosomes=[chromosome], starts=[start], ends=[end])
-                #print(atomic_range)
-                # look for overlapping bam_ranges entries ...
-                #bam_overlap = bam_ranges.set_intersect(atomic_range)
-                #bam_overlap = atomic_range.intersect(bam_ranges)
-                #print(bam_overlap)
                 rle = bam_rle[chromosome][start:end]
-                
-                #print(rle)
-                mean = pd.Series(rle.values).repeat(rle.runs).mean()
-                #stddev = pd.Series(rle.values).repeat(rle.runs).std()
-                #print("\tmean=%s: std=%s" % (mean, stddev))
+                mean = np.repeat(rle.values,rle.runs).mean()
+
                 meanList.append(mean)
             else:
                 meanList.append(0)
-            #print(len(meanList))
-        #tiled_coverage.mean_coverage = meanList
-        #print(tiled_coverage)
-        return meanList
+        tiled_coverage.MeanCov = meanList
+        return tiled_coverage
             
-        
+    def get_tiled_mean_coverage2(self, bam_ranges, bam_rle, tile_size=100):
+        # this doesn't have any performance benefit over a df.itertuples
+        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)            
+        def chunk(row):
+            if row.NumberOverlaps == 0:
+                return 0                
+            rle = bam_rle[row.Chromosome][row.Start : row.End]
+            return np.repeat(rle.values,rle.runs).mean()
+        tqdm.pandas()
+        tiled_coverage.MeanCoverage = tiled_coverage.df.progress_apply(chunk, axis=1)
+        return tiled_coverage
+    
+    def get_tiled_mean_coverage3(self, bam_ranges, bam_rle, tile_size=100):
+        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
+        # precompute the per-base depths of coverage ...
+        base_data = {}
+        chromosomes = self.get_chromosomes()
+        for chromosome in tqdm(chromosomes):
+            base_data[chromosome] = np.repeat(
+                bam_rle[chromosome].values, bam_rle[chromosome].runs)
+        def chunk(row):
+            if row.NumberOverlaps == 0:
+                return 0                
+            return base_data[row.Chromosome][row.Start : row.End].mean()
+        tqdm.pandas()
+        tiled_coverage.MeanCoverage = tiled_coverage.df.progress_apply(chunk, axis=1)
+        return tiled_coverage
+            
