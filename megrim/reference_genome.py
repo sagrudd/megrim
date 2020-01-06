@@ -127,4 +127,20 @@ class ReferenceGenome:
         tqdm.pandas()
         tiled_coverage.MeanCoverage = tiled_coverage.df.progress_apply(chunk, axis=1)
         return tiled_coverage
+    
+    def get_tiled_mean_coverage4(self, bam_ranges, bam_rle, tile_size=100):
+        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
+        tiled_coverage.MeanCoverage = 0
+        
+        df_data = tiled_coverage.df
+        chromosomes = self.get_chromosomes()
+        for chromosome in tqdm(chromosomes):
+            base_data = np.repeat(bam_rle[chromosome].values, 
+                                  bam_rle[chromosome].runs)
+            def chunk(row):
+                return base_data[row.Start : row.End].mean()
+            
+            scores = df_data.loc[((df_data['Chromosome']==chromosome) & (df_data['NumberOverlaps']>0)),:].apply(chunk, axis=1)
+            df_data.loc[((df_data['Chromosome']==chromosome) & (df_data['NumberOverlaps']>0)),('MeanCoverage')]=scores
+        return pr.PyRanges(df_data)
             
