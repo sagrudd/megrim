@@ -10,7 +10,6 @@ Created on Thu Jan  2 16:52:28 2020
 from pysam import FastaFile
 import pyranges as pr
 import numpy as np
-import pandas as pd
 from environment import Flounder
 from tqdm import tqdm
 #from tqdm.auto import tqdm
@@ -79,68 +78,68 @@ class ReferenceGenome:
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
     
-    def get_tiled_mean_coverage(self, bam_ranges, bam_rle, tile_size=100):
-        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
-        print(tiled_coverage)
-        meanList = []
-        for row in tqdm(tiled_coverage.df.itertuples(), total=tiled_coverage.df.shape[0]):
-            n = row.NumberOverlaps
-            if n > 0:
-                #print(row)
-                chromosome = row.Chromosome
-                start = row.Start
-                end = row.End
-                
-                rle = bam_rle[chromosome][start:end]
-                mean = np.repeat(rle.values,rle.runs).mean()
-
-                meanList.append(mean)
-            else:
-                meanList.append(0)
-        tiled_coverage.MeanCov = meanList
-        return tiled_coverage
-            
-    def get_tiled_mean_coverage2(self, bam_ranges, bam_rle, tile_size=100):
-        # this doesn't have any performance benefit over a df.itertuples
-        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)            
-        def chunk(row):
-            if row.NumberOverlaps == 0:
-                return 0                
-            rle = bam_rle[row.Chromosome][row.Start : row.End]
-            return np.repeat(rle.values,rle.runs).mean()
-        tqdm.pandas()
-        tiled_coverage.MeanCoverage = tiled_coverage.df.progress_apply(chunk, axis=1)
-        return tiled_coverage
-    
-    def get_tiled_mean_coverage3(self, bam_ranges, bam_rle, tile_size=100):
-        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
-        # precompute the per-base depths of coverage ...
-        base_data = {}
-        chromosomes = self.get_chromosomes()
-        for chromosome in tqdm(chromosomes):
-            base_data[chromosome] = np.repeat(
-                bam_rle[chromosome].values, bam_rle[chromosome].runs)
-        def chunk(row):
-            if row.NumberOverlaps == 0:
-                return 0                
-            return base_data[row.Chromosome][row.Start : row.End].mean()
-        tqdm.pandas()
-        tiled_coverage.MeanCoverage = tiled_coverage.df.progress_apply(chunk, axis=1)
-        return tiled_coverage
-    
-    def get_tiled_mean_coverage4(self, bam_ranges, bam_rle, tile_size=100):
-        tiled_coverage = self.get_tiled_coverage(bam_ranges, tile_size)
-        tiled_coverage.MeanCoverage = 0
-        
-        df_data = tiled_coverage.df
-        chromosomes = self.get_chromosomes()
+    def get_tiled_mean_coverage(self, bam, ranges=None, tile_size=100):
+        if ranges is None:
+            ranges = self.get_tiled_coverage(bam.get_bam_ranges(), tile_size)
+        else:
+            if 'NumberOverlaps' not in ranges.columns:
+                ranges = ranges.coverage(bam.get_bam_ranges())
+        # create a clear dataset for coverage ...
+        ranges.MeanCoverage = 0
+        # create data objects required
+        bam_rle = bam.get_bam_coverage()
+        df_data = ranges.df
+        # pull chromosome id from the provided ranges
+        chromosomes = df_data['Chromosome'].unique()
         for chromosome in tqdm(chromosomes):
             base_data = np.repeat(bam_rle[chromosome].values, 
                                   bam_rle[chromosome].runs)
             def chunk(row):
                 return base_data[row.Start : row.End].mean()
-            
             scores = df_data.loc[((df_data['Chromosome']==chromosome) & (df_data['NumberOverlaps']>0)),:].apply(chunk, axis=1)
             df_data.loc[((df_data['Chromosome']==chromosome) & (df_data['NumberOverlaps']>0)),('MeanCoverage')]=scores
         return pr.PyRanges(df_data)
+    
+    
+    
+    
+    
+    def augment_annotation(self, bam, ranges):
+        # rstart - the number of reads that start within the given interval
+        
+        # basesstart - the number of bases contained within rstart
+        
+        # meanreadlen - mean read length for any reads within this interval
+        
+        # startreadlen - mean read length for reads that start within interval
+        
+        # strandp
+        
+        # strandn
+        
+        # mapq - mapq for reads starting in segment
+        
+        # map0 - mapq for reads overlapping the segment
+        
+        # readq - per read q score for reads starting in segment 
+        
+        # read0 - per read q score for reads overlapping segment 
+        
+        # nm - this is the #NM mismatch count; reads starting in segment
+        
+        # cigar_del
+        
+        # cigar_ins
+        
+        # cigar_mapped
+        
+        ##### and some local sequence context annotations
+        
+        # gccount
+        
+        # ncount
+        
+        return ranges
+    
+        
             

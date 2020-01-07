@@ -6,7 +6,7 @@ Created on Thu Jan  2 16:40:04 2020
 @author: srudd
 """
 
-
+import sys
 from environment import Flounder
 from genome_geometry import BamHandler, BedHandler
 from reference_genome import ReferenceGenome
@@ -24,29 +24,38 @@ ref.skip_chromosome("MT")
 bed = BedHandler("/Users/srudd/Desktop/enrichment_targets.bed")
 bed.set_reference(ref)
 bed.set_target_proximity(5000)
-print(bed.get_bed_targets())
 
 # use the bed information to create pyranges coordinates for on-target,
 # target-proximal and not-target regions of the genome 
 on_target = bed.get_target_ranges()
-print(on_target)
 target_proximal = bed.get_target_proximal_ranges()
-print(target_proximal)
 untargeted = bed.get_untargeted_ranges()
-print(untargeted)
 
 # define the BAM file of interest
 bam = BamHandler("/Users/srudd/Desktop/cas9_FAK76554.bam")
 
+bam.get_sam_annotation('1', 155179779, 155195266)
 
-#coverage_data = on_target.coverage(bam.get_bam_ranges())
-#print(coverage_data)
-#print(coverage_data.NumberOverlaps)
+sys.exit(0)
 
-tiled_coverage_means = ref.get_tiled_mean_coverage4(
-    bam_ranges=bam.get_bam_ranges(),                                         
-    bam_rle=bam.get_bam_coverage(),                                         
-    tile_size=1000)
-#tiled_coverage = tiled_coverage[tiled_coverage.NumberOverlaps > 0]
-#print(tiled_coverage)
-#print(tiled_coverage.NumberOverlaps)
+# create a tiled_genome_representation of coverage
+tiled_coverage_means = ref.get_tiled_mean_coverage(
+    bam, tile_size=1000)
+print(tiled_coverage_means)
+
+# prepare coverage update for the on_target ranges
+on_target_universe = ref.get_tiled_mean_coverage(bam, ranges=on_target)
+target_proximal_universe = ref.get_tiled_mean_coverage(bam, ranges=target_proximal)
+print(target_proximal_universe.MeanCoverage)
+
+# look for the off-target regions of the genome
+off_target_scale = 20
+# we have local depths of coverage within the tiled_coverage_means ...
+# this also includes the on_target genomic regions ... first step is thus
+# to filter out the regions of the genome that are on_target ...
+filtered_coverage = tiled_coverage_means.subtract(on_target_universe)
+background_threshold = filtered_coverage.MeanCoverage.mean() * off_target_scale
+off_target_universe = ref.get_tiled_mean_coverage(bam, ranges=filtered_coverage[filtered_coverage.MeanCoverage >= background_threshold].slack(10).merge().slack(-10))
+background_universe = ref.get_tiled_mean_coverage(bam, ranges=untargeted.subtract(off_target_universe))
+
+

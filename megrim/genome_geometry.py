@@ -10,6 +10,8 @@ import logging
 from math import log10
 import pandas as pd
 import pyranges as pr
+import functools
+import pysam
 
 
 class GenomeGeometry:
@@ -110,13 +112,55 @@ class BamHandler:
     
     def __init__(self, bam):
         self.bam = bam
+        self.samfile = pysam.AlignmentFile(bam, "rb")
 
+    @functools.lru_cache()
     def get_bam_ranges(self):
         return pr.read_bam(self.bam)
     
     def get_bam_coverage(self):
         return self.get_bam_ranges().to_rle(strand=False)
 
+    def get_sam_reads(self, chromosome, start, end):
+        return self.samfile.fetch(chromosome, start, end)
+    
+    def get_sam_annotation(self, chromosome, start, end):
+        annot = self.get_sam_reads(chromosome, start, end)
+        start = []
+        reference_length = []
+        mapping_quality = []
+        strand = []
+        mapped_read_q = []
+        cigar_m = []
+        cigar_i = []
+        cigar_d = []
+        nm = []
+        for read in annot:
+            start.append(read.reference_start)
+            reference_length.append(read.reference_length)
+            mapping_quality.append(read.mapping_quality)
+            if read.is_reverse:
+                strand.append("-")
+            else:
+                strand.append("+")
+            mapped_read_q.append(-10 * log10((10 ** (pd.Series(read.query_alignment_qualities) / -10)).mean()))
+            cigar_stats = read.get_cigar_stats()
+            cigar_m.append(cigar_stats[0][0])
+            cigar_i.append(cigar_stats[0][1])
+            cigar_d.append(cigar_stats[0][2])
+            nm.append(cigar_stats[0][10])
+        annot = {'reference_start': start,
+                 'reference_length': reference_length,
+                 'mapping_quality': mapping_quality,
+                 'strand': strand,
+                 'mapped_read_q': mapped_read_q,
+                 'cigar_m': cigar_m,
+                 'cigar_i': cigar_i,
+                 'cigar_d': cigar_d,
+                 'nm': nm}
+        print(pd.DataFrame.from_dict(annot))
+        
+        
     
     
         
