@@ -158,7 +158,7 @@ class BamHandler:
                  'cigar_i': cigar_i,
                  'cigar_d': cigar_d,
                  'nm': nm}
-        print(pd.DataFrame.from_dict(annot))
+        return pd.DataFrame.from_dict(annot)
         
         
     

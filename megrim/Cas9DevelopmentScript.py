@@ -15,15 +15,16 @@ from reference_genome import ReferenceGenome
 flounder = Flounder()
 flounder.set_path("/tmp/floundeR")
 
+target_proximity = 5000
+
 # define a reference genome - this requires a fasta file
 ref = ReferenceGenome("/Users/srudd/Desktop/Human_genome.fasta")
-ref.info()
 ref.skip_chromosome("MT")
 
 # define a bed file of target regions of interest
 bed = BedHandler("/Users/srudd/Desktop/enrichment_targets.bed")
 bed.set_reference(ref)
-bed.set_target_proximity(5000)
+bed.set_target_proximity(target_proximity)
 
 # use the bed information to create pyranges coordinates for on-target,
 # target-proximal and not-target regions of the genome 
@@ -34,9 +35,9 @@ untargeted = bed.get_untargeted_ranges()
 # define the BAM file of interest
 bam = BamHandler("/Users/srudd/Desktop/cas9_FAK76554.bam")
 
-bam.get_sam_annotation('1', 155179779, 155195266)
+#bam.get_sam_annotation('1', 155179779, 155195266)
 
-sys.exit(0)
+#sys.exit(0)
 
 # create a tiled_genome_representation of coverage
 tiled_coverage_means = ref.get_tiled_mean_coverage(
@@ -58,4 +59,6 @@ background_threshold = filtered_coverage.MeanCoverage.mean() * off_target_scale
 off_target_universe = ref.get_tiled_mean_coverage(bam, ranges=filtered_coverage[filtered_coverage.MeanCoverage >= background_threshold].slack(10).merge().slack(-10))
 background_universe = ref.get_tiled_mean_coverage(bam, ranges=untargeted.subtract(off_target_universe))
 
+ref.augment_annotation(bam, on_target_universe)
 
+ref.deep_dive(bam, on_target_universe, target_proximity=target_proximity)

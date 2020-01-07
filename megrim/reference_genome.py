@@ -12,6 +12,8 @@ import pyranges as pr
 import numpy as np
 from environment import Flounder
 from tqdm import tqdm
+from math import log10
+import pandas as pd
 #from tqdm.auto import tqdm
 
 class ReferenceGenome:
@@ -105,41 +107,73 @@ class ReferenceGenome:
     
     
     def augment_annotation(self, bam, ranges):
-        # rstart - the number of reads that start within the given interval
         
-        # basesstart - the number of bases contained within rstart
-        
-        # meanreadlen - mean read length for any reads within this interval
-        
-        # startreadlen - mean read length for reads that start within interval
-        
-        # strandp
-        
-        # strandn
-        
-        # mapq - mapq for reads starting in segment
-        
-        # map0 - mapq for reads overlapping the segment
-        
-        # readq - per read q score for reads starting in segment 
-        
-        # read0 - per read q score for reads overlapping segment 
-        
-        # nm - this is the #NM mismatch count; reads starting in segment
-        
-        # cigar_del
-        
-        # cigar_ins
-        
-        # cigar_mapped
-        
-        ##### and some local sequence context annotations
-        
-        # gccount
-        
-        # ncount
-        
-        return ranges
+        def extract_annot(row):
+            # bam_data['reference_start'] >= 155179779
+            # start_data = bam_data[bam_data['reference_start'] >= 155179779]
+            bam_data = bam.get_sam_annotation(row.Chromosome, row.Start, row.End)
+            start_data = bam_data[bam_data['reference_start'] >= row.Start]
+            # rstart - the number of reads that start within the given interval
+            rstart = len(start_data)
+            # basesstart - the number of bases contained within rstart
+            bases_start = start_data.reference_length.sum()
+            # meanreadlen - mean read length for any reads within this interval
+            mean_read_len = bam_data.reference_length.mean()
+            # startreadlen - mean read length for reads that start within interval
+            start_read_len = start_data.reference_length.mean()
+            # strandp
+            strand_p = (bam_data.strand == '+').sum()
+            # strandn
+            strand_n = (bam_data.strand == '-').sum()
+            # mapq - mapq for reads starting in segment
+            mapq = (-10 * log10((10 ** (start_data.mapping_quality / -10)).mean()))
+            # map0 - mapq for reads overlapping the segment
+            map0 = (-10 * log10((10 ** (bam_data.mapping_quality / -10)).mean()))
+            # readq - per read q score for reads starting in segment 
+            readq = (-10 * log10((10 ** (start_data.mapped_read_q / -10)).mean()))
+            # read0 - per read q score for reads overlapping segment 
+            read0 = (-10 * log10((10 ** (bam_data.mapped_read_q / -10)).mean()))
+            # nm - this is the #NM mismatch count; reads starting in segment
+            nm = start_data.nm.sum()
+            # cigar_del
+            cigar_d = start_data.cigar_d.sum()
+            # cigar_ins
+            cigar_i = start_data.cigar_i.sum()
+            # cigar_mapped
+            cigar_m = start_data.cigar_m.sum()
+            ##### and some local sequence context annotations
+            
+            # gccount
+            
+            # ncount
+            
+            return rstart, bases_start, mean_read_len, start_read_len, \
+                strand_p, strand_n, mapq, map0, readq, read0, nm, cigar_m, \
+                cigar_i, cigar_d
+                
+        df_data = ranges.df
+        tqdm.pandas()
+        df_data[['rstart', 'bases_start', 'mean_read_len', 'start_read_len', 
+                 'strand_p', 'strand_n', 'mapq', 'map0', 'readq', 'read0',
+                 'nm', 'cigar_m', 'cigar_i', 'cigar_d']] = df_data.progress_apply(extract_annot, axis=1, result_type='expand')
+        return pr.PyRanges(df_data)
     
+        
+    def deep_dive(self, bam, ranges, target_proximity, window_size=10):
+        # implement a function for the data exploration ...
+        def deeper_dive(row):
+            tiled = pr.gf.tile_genome(pr.PyRanges(chromosomes=[row.Chromosome], starts=[row.Start], ends=[row.End]), window_size, tile_last=False)
+            xx = self.get_tiled_mean_coverage(bam, tiled)
+            
+        # adjust the boundaries of the provided data
+        deep_dive_data = ranges
+        deep_dive_data.Start = deep_dive_data.Start - target_proximity
+        deep_dive_data.End = deep_dive_data.Start + target_proximity
+        
+        df_data = deep_dive_data.df
+        tqdm.pandas()
+        
+        df_data.progress_apply(deeper_dive, axis=1)
+        
         
             
