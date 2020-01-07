@@ -1,6 +1,6 @@
 from IPython.display import Image, display, HTML, Markdown, clear_output
 from .project_manager import project_manager
-from .scan_content import scan_content
+from .scan_content import ScanContent
 from .accessory_functions import *
 import ipywidgets as widgets
 import os
@@ -125,7 +125,7 @@ class extract_file_system_content:
                     self.registry.add_item(self.reference_id.value, "file://" + option, dest)
             else:
                 print("aggregating data ... [key=%s]" % self.aggregate_key)
-                scanner = scan_content(option, self.aggregate_key)
+                scanner = ScanContent(option, self.aggregate_key)
                 fname = os.path.basename(re.sub("/*$", "", option))
                 target = os.path.join(self.path, "%s.%s.gz" % (fname, self.object_id))
                 scanner.aggregate(target)

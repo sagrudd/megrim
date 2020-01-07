@@ -4,7 +4,7 @@ import re
 import tqdm
 
 
-class scan_content:
+class ScanContent:
     def __init__(self, provided_path, regex):
         print("searching [%s] for target files" % provided_path)
         self.regex = regex

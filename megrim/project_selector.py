@@ -44,7 +44,7 @@ class project_selector:
 
     def add_project_button_clicked(self, button):
         with self.project_selection_panel:
-            option = removeDisallowedFilenameChars(self.project_name.value)
+            option = remove_disallowed_filename_chars(self.project_name.value)
             print("add button clicked [%s] ..." % option)
             if option == self.project_name_txt:
                 raise RuntimeError('please specify a project name for this [%s] study' % self.project_type)

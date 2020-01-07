@@ -7,9 +7,9 @@ Created on Thu Jan  2 16:40:04 2020
 """
 
 import sys
-from environment import Flounder
-from genome_geometry import BamHandler, BedHandler
-from reference_genome import ReferenceGenome
+from megrim.environment import Flounder
+from megrim.genome_geometry import BamHandler, BedHandler
+from megrim.reference_genome import ReferenceGenome, augment_annotation
 
 # create an instance of flounder for path handling
 flounder = Flounder()
@@ -35,9 +35,7 @@ untargeted = bed.get_untargeted_ranges()
 # define the BAM file of interest
 bam = BamHandler("/Users/srudd/Desktop/cas9_FAK76554.bam")
 
-#bam.get_sam_annotation('1', 155179779, 155195266)
-
-#sys.exit(0)
+# bam.get_sam_annotation('1', 155179779, 155195266)
 
 # create a tiled_genome_representation of coverage
 tiled_coverage_means = ref.get_tiled_mean_coverage(
@@ -56,9 +54,10 @@ off_target_scale = 20
 # to filter out the regions of the genome that are on_target ...
 filtered_coverage = tiled_coverage_means.subtract(on_target_universe)
 background_threshold = filtered_coverage.MeanCoverage.mean() * off_target_scale
-off_target_universe = ref.get_tiled_mean_coverage(bam, ranges=filtered_coverage[filtered_coverage.MeanCoverage >= background_threshold].slack(10).merge().slack(-10))
+off_target_universe = ref.get_tiled_mean_coverage(bam, ranges=filtered_coverage[
+    filtered_coverage.MeanCoverage >= background_threshold].slack(10).merge().slack(-10))
 background_universe = ref.get_tiled_mean_coverage(bam, ranges=untargeted.subtract(off_target_universe))
 
-ref.augment_annotation(bam, on_target_universe)
+augment_annotation(bam, on_target_universe)
 
-ref.deep_dive(bam, on_target_universe, target_proximity=target_proximity)
+# ref.deep_dive(bam, on_target_universe, target_proximity=target_proximity)

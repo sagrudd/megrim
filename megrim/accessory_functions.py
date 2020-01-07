@@ -1,4 +1,6 @@
 import os
+from urllib.error import HTTPError, URLError
+
 import progressbar
 import unicodedata
 import urllib
@@ -16,11 +18,11 @@ def web_check(url):
         return True
 
 
-def removeDisallowedFilenameChars(filename):
+def remove_disallowed_filename_chars(filename):
     # https://stackoverflow.com/questions/295135/turn-a-string-into-a-valid-filename
-    validFilenameChars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-    cleanedFilename = unicodedata.normalize(u'NFKD', filename).encode('ASCII', 'ignore').decode('ascii')
-    return ''.join(c for c in cleanedFilename if c in validFilenameChars)
+    valid_filename_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+    cleaned_filename = unicodedata.normalize(u'NFKD', filename).encode('ASCII', 'ignore').decode('ascii')
+    return ''.join(c for c in cleaned_filename if c in valid_filename_chars)
 
 
 def target_dir(target):

@@ -12,7 +12,6 @@ scripts and results in a peripheral location
 """
 
 
-
 class Flounder:
     """
     FloundeR was the name of the R package that managed tutorial content,
@@ -23,12 +22,12 @@ class Flounder:
     of workspace paths, directory structures and is aiming towards
     persistence of analysis states where possible
     """
-    
+
     def __init__(self):
         self.location = ''
-        
+
     def set_path(self, path):
         self.location = path
-        
+
     def get_path(self):
         return self.location
