@@ -13,6 +13,7 @@ from megrim.environment import Flounder
 from tqdm import tqdm
 from math import log10
 import pandas as pd
+import logging
 
 # from tqdm.auto import tqdm
 
@@ -108,6 +109,19 @@ class ReferenceGenome:
             df_data.loc[
                 ((df_data['Chromosome'] == chromosome) & (df_data['NumberOverlaps'] > 0)), ('MeanCoverage')] = scores
         return pr.PyRanges(df_data)
+
+
+    def get_tiled_mean_coverage2(self,bam,ranges=None, tile_size=100):
+        if ranges is None:
+            ranges = self.get_tiled_genome(tile_size)
+        rle = bam.get_bam_coverage()
+        logging.info("subsetting genomic RLE with ranges")
+        df = rle[ranges].df
+        logging.debug("done ...")
+        df['VR'] = df['Run'] * df['Value']
+        df = df.groupby(["Chromosome", "Start"]).agg({"Chromosome": "first", "Start": "first", "End": "first", "Run":np.sum, "VR":np.sum})
+        df['MeanCoverage'] = df['VR'] / df['Run']
+        return pr.PyRanges(df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
 
     def deep_dive(self, bam, ranges, target_proximity, window_size=10):
         # implement a function for the data exploration ...

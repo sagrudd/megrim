@@ -112,9 +112,11 @@ class BamHandler:
 
     @functools.lru_cache()
     def get_bam_ranges(self):
+        logging.info("Extracting BAM ranges")
         return pr.read_bam(self.bam)
 
     def get_bam_coverage(self):
+        logging.info("Extracting BAM coverage")
         return self.get_bam_ranges().to_rle(strand=False)
 
     def get_sam_reads(self, chromosome, start, end):
