@@ -34,6 +34,5 @@ class Flounder:
         return self.location
     
 
-
-def get_branding_logo():
+def get_branding_logo(telemetry=None):
     return resource_string(__name__, 'data/ONT_logo.png')
