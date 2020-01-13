@@ -11,6 +11,7 @@ a user may be working in a non-persistent workspace with primary data,
 scripts and results in a peripheral location
 """
 
+from pkg_resources import resource_string
 
 class Flounder:
     """
@@ -31,3 +32,8 @@ class Flounder:
 
     def get_path(self):
         return self.location
+    
+
+
+def get_branding_logo():
+    return resource_string(__name__, 'data/ONT_logo.png')

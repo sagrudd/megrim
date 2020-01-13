@@ -7,13 +7,17 @@ Created on Thu Jan  2 16:40:04 2020
 """
 
 import sys
-from megrim.environment import Flounder
+from IPython.display import Image
+from megrim.environment import get_branding_logo, Flounder
 from megrim.genome_geometry import BamHandler, BedHandler
 from megrim.reference_genome import ReferenceGenome, augment_annotation
 from importlib import reload
 import logging
 reload(logging)
 logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG, datefmt='%I:%M:%S')
+
+
+Image(get_branding_logo())
 
 
 # create an instance of flounder for path handling
