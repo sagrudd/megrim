@@ -123,7 +123,7 @@ class SequenceSummaryHandler:
                 compression = "gzip"
             
             data = dd.read_csv(self.target_file, delimiter="\t", compression=compression, dtype="object")
-            data = data[~(data["filename"].compute() == 'filename')].compute()
+            data = data[~(data["filename"] == 'filename')].compute()
             # +--------------------------+--------+----------+
             # | Column                   | Found  | Expected |
             # +--------------------------+--------+----------+
@@ -195,7 +195,7 @@ class SequenceSummaryHandler:
             print("ERROR - there is not a suitable filename column")
             sys.exit(0)
 
-        fastq_id = str(self.seq_sum_head[target][0]).split("_")
+        fastq_id = str(self.seq_sum_head[target].iloc[0]).split("_")
         if len(fastq_id) == 3:
             fastq_id = fastq_id[0]
         elif len(fastq_id) == 15:
