@@ -278,12 +278,12 @@ class SequenceSummaryHandler:
             runtime = take_closest(canonical_runs, runtime)
         return (runtime * scale["hours"]) / scale[units]
 
-    def plot_passed_gauge(self):
+    def plot_passed_gauge(self, plot_width=640, plot_height=480, plot_type="native"):
         read_count = len(self.seq_sum)
         passed_read_count = self.seq_sum.passes_filtering.sum().compute()
         perc_val = passed_read_count / read_count * 100
 
-        p = figure(plot_width=640, plot_height=480, x_range=(0.25, 1.75), y_range=(0.7, 1.5), toolbar_location=None)
+        p = figure(plot_width=plot_width, plot_height=plot_height, x_range=(0.25, 1.75), y_range=(0.7, 1.5), toolbar_location=None)
 
         start_val = 0
         middle_val = (math.pi / 100) * (100 - perc_val)
@@ -306,10 +306,20 @@ class SequenceSummaryHandler:
         p.axis.visible = False
         p.xgrid.visible = False
         p.ygrid.visible = False
-        return p
+        return self.handle_output(p, plot_type)
 
 
-    def plot_channel_activity(self):
+    def handle_output(self, p, plot_type):
+        if plot_type == 'native':
+            return p
+        elif plot_type == 'jupyter':
+            show(p)
+            return None
+        else:
+            return "unknown plottype"
+
+
+    def plot_channel_activity(self, plot_width=640, plot_height=480, plot_type="native"):
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
         # layout = channel_map.get_platform_map()
         layout = channel_map.get_platform_density()
@@ -331,7 +341,7 @@ class SequenceSummaryHandler:
 
         p = figure(title="channel activity plot",
                    x_range=columns, y_range=rows,
-                   x_axis_location="above", plot_width=640, plot_height=480,
+                   x_axis_location="above", plot_width=plot_width, plot_height=plot_height,
                    tools=TOOLS, toolbar_location='below')
 
         p.axis.visible = False
@@ -354,7 +364,7 @@ class SequenceSummaryHandler:
                              title="#reads",
                              label_standoff=6, border_line_color=None, location=(0, 0))
         p.add_layout(color_bar, 'right')
-        return p
+        return self.handle_output(p, plot_type)
 
     def library_characteristics_infographic(self):
 
@@ -400,7 +410,8 @@ class SequenceSummaryHandler:
 
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
-                             annotate_mean=True, annotate_n50=True):
+                             annotate_mean=True, annotate_n50=True,
+                             plot_width=640, plot_height=480, plot_type="native"):
         # there are some approaches such as np.histogram; seems to split
         # data into clear bins; but not sure on how for stacked ranges ...
         # let's use a few more lines of code and perform manually
@@ -475,7 +486,9 @@ class SequenceSummaryHandler:
             plot_key = 'count'
             plot_legend = "count (reads)"
 
-        p = figure(title="Histogram showing read-length distribution", background_fill_color="lightgrey")
+        p = figure(title="Histogram showing read-length distribution", 
+                   background_fill_color="lightgrey", plot_width=plot_width, 
+                   plot_height=plot_height)
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification')
 
@@ -503,7 +516,8 @@ class SequenceSummaryHandler:
         p.yaxis.formatter = NumeralTickFormatter(format="0,0")
         p.grid.grid_line_color = "white"
 
-        return p
+        return self.handle_output(p, plot_type)
+    
 
     def plot_q_distribution(self, bins=30):
         # this is a plot, much like the one above ...
