@@ -660,9 +660,9 @@ class SequenceSummaryHandler:
         # l_boundaries = np.linspace(np.log10(100), np.log10(longest_read), num=xbins, endpoint=True)
         l_boundaries = np.logspace(np.log10(100), np.log10(longest_read), num=xbins)
 
-        print(q_boundaries)
+        logging.debug(q_boundaries)
 
-        print(l_boundaries)
+        logging.debug(l_boundaries)
 
         geometry = GenomeGeometry(
             pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
@@ -691,7 +691,7 @@ class SequenceSummaryHandler:
         layout["alpha"] = 1
         layout.loc[layout["count"] <= plot_depth_threshold, 'alpha'] = 0
 
-        print(layout)
+        logging.debug(layout)
 
         colors = []
 
@@ -765,7 +765,7 @@ class SequenceSummaryHandler:
 
         # seq_sum['start_time'] is measured in seconds
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
+                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
         assignments = np.digitize(self.seq_sum['start_time'].compute() / 60 / 60, boundaries)
         pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60,
@@ -837,7 +837,7 @@ class SequenceSummaryHandler:
             scaleVal = 1e3
 
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
+                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
         assignments = np.digitize(self.seq_sum['start_time'].compute() / 60 / 60, boundaries)
         pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60,
@@ -890,7 +890,7 @@ class SequenceSummaryHandler:
     def get_sequence_base_point(self, fraction=0.5, interval_mins=5):
         # using numpy interpolate to calculate intersect ...
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
+                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
         pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60,
                                        boundaries)
