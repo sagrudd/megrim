@@ -13,7 +13,7 @@ setuptools.setup(
     url="https://github.com/sagrudd/megrim",
     packages=setuptools.find_packages(),
     package_data = {
-        'megrim': ['data/ONT_logo.png']
+        'megrim': ['data/ONT_logo.png', 'data/FontAwesome5Free-Solid-900.otf']
     },
     include_package_data=True,
     install_requires=['datetime', 'pytz', 'progressbar', 'tqdm', 'ipython', 

@@ -111,8 +111,8 @@ class SequenceSummaryHandler:
         try:
             self._load_seqsum()
         except ValueError as verr:
-            logging.error("ValueError error: {0}".format(verr))
-            logging.error("ERROR - Loading native file did not work ...")
+            logging.debug("ValueError error: {0}".format(verr))
+            logging.info("ERROR - Loading native file did not work ...")
 
             extension = os.path.splitext(self.target_file)[1].lower()
             compression = None
@@ -122,7 +122,7 @@ class SequenceSummaryHandler:
             elif (extension in [".gzip", ".gz"]):
                 compression = "gzip"
             
-            data = dd.read_csv(self.target_file, delimiter="\t", compression=compression, dtype="object")
+            data = dd.read_csv(self.target_file, delimiter="\t", compression=compression, blocksize=None, dtype="object")
             data = data[~(data["filename"] == 'filename')].compute()
             # +--------------------------+--------+----------+
             # | Column                   | Found  | Expected |
@@ -155,8 +155,8 @@ class SequenceSummaryHandler:
             self.seq_sum_head = self.seq_sum.head()
 
         except Exception as e:
-            print("ValueError error: {0}".format(e))
-            print("ERROR - this is an unexpected edge case ...")
+            logging.error("ValueError error: {0}".format(e))
+            logging.error("ERROR - this is an unexpected edge case ...")
             sys.exit(0)
         # start excluding dask columns that are not of core interest
         keep = ['channel', 'start_time', 'duration', 'num_events',
@@ -165,7 +165,7 @@ class SequenceSummaryHandler:
                 ]
         for col in self.seq_sum.columns:
             if not col in keep:
-                print("dropping %s" % col)
+                logging.debug("dropping %s" % col)
                 self.seq_sum = self.seq_sum.drop(col, axis=1)
         pbar = ProgressBar()
         pbar.register()

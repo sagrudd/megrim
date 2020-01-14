@@ -19,8 +19,9 @@ import fontawesome as fa
 from matplotlib.font_manager import FontProperties
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from pkg_resources import resource_filename
 
-fp = FontProperties(fname=r"Font Awesome 5 Free-Solid-900.otf")
+fp = FontProperties(fname=resource_filename('megrim', 'data/FontAwesome5Free-Solid-900.otf'))
 
 
 class InfographicNode:
@@ -116,7 +117,7 @@ class InfographicPlot:
             # known (and unfixed) bug 
             # - https://github.com/matplotlib/matplotlib/issues/9007
             rect = patches.Rectangle((0, 0), 1, 1, linewidth=1, edgecolor='#2171b5', facecolor='#2171b5')
-            print("x=%s, y=%s" % (x, y))
+            
             if self.rows > 1:
                 axarr[y, x].axis('off')
                 axarr[y, x].axis([0, 1, 0, 1])
