@@ -909,7 +909,7 @@ class SequenceSummaryHandler:
             plot_type = self.get_plot_type()
         print("plotting translocation speed ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
+                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
 
         sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
@@ -948,7 +948,7 @@ class SequenceSummaryHandler:
             plot_type = self.get_plot_type()
         print("plotting active channel count ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
+                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
 
         sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
