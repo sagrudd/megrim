@@ -913,10 +913,14 @@ class SequenceSummaryHandler:
                                  endpoint=True, retstep=False)
 
         sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
-        sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
-        sdata['group'] = sdata['group'].astype('category')
-        sdata['rate'] = sdata['sequence_length_template'] / sdata['duration']
-
+        # sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
+        # sdata['group'] = sdata['group'].astype('category')
+        # sdata['rate'] = sdata['sequence_length_template'] / sdata['duration']
+        sdata = sdata.reindex(columns=sdata.columns.tolist() + ['group'])
+        sdata = sdata.reindex(columns=sdata.columns.tolist() + ['rate'])
+        sdata.loc[:, "group"] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
+        sdata.loc[:, "rate"] = sdata['sequence_length_template'] / sdata['duration']
+        sdata.loc[:, "group"] = sdata['group'].astype('category')
         groups = sdata.groupby('group')
         q1 = groups['rate'].quantile(q=0.25)
         q2 = groups['rate'].quantile(q=0.5)
@@ -963,7 +967,7 @@ class SequenceSummaryHandler:
         time_chunks = np.unique(sdata['group'])
 
         plot = figure(title='Plot showing number of observed channels against time', x_axis_label='Time (hours)',
-                      y_axis_label='Number of active channels (n)))', background_fill_color="lightgrey",
+                      y_axis_label='Number of active channels (n)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height)
 
         plot.step(time_chunks, channel_count, line_width=2, mode="before")
