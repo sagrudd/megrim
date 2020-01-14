@@ -21,7 +21,7 @@ from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
 from time import time
 from megrim.infographic_plots import InfographicPlot, InfographicNode
-from bokeh.io import export_png, output_notebook
+from bokeh.io import export_png
 from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, \
     ColumnDataSource
 from bokeh.palettes import (Blues9)
@@ -51,8 +51,11 @@ class Timer():
 
 class SequenceSummaryHandler:
 
-    def __init__(self, target_file):
+    def __init__(self, target_file, plot_width=640, plot_height=480, plot_type="native"):
         self.target_file = target_file
+        self.plot_width = plot_width
+        self.plot_height = plot_height
+        self.plot_type = plot_type
         self.temp_files = []
         atexit.register(self.cleanup)
         self._import_data()
@@ -86,6 +89,25 @@ class SequenceSummaryHandler:
         )
         # slice out the head entries for further functionality
         self.seq_sum_head = self.seq_sum.head()
+
+
+    def set_plot_width(self, plot_width):
+        self.plot_width = plot_width
+        
+    def set_plot_height(self, plot_height):
+        self.plot_height = plot_height
+        
+    def set_plot_type(self, plot_type):
+        self.plot_type = plot_type
+        
+    def get_plot_height(self):
+        return self.plot_height
+    
+    def get_plot_width(self):
+        return self.plot_width
+    
+    def get_plot_type(self):
+        return self.plot_type
 
     def _import_data(self):
         """
@@ -278,7 +300,14 @@ class SequenceSummaryHandler:
             runtime = take_closest(canonical_runs, runtime)
         return (runtime * scale["hours"]) / scale[units]
 
-    def plot_passed_gauge(self, plot_width=640, plot_height=480, plot_type="native"):
+    def plot_passed_gauge(self, plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
+        
         read_count = len(self.seq_sum)
         passed_read_count = self.seq_sum.passes_filtering.sum().compute()
         perc_val = passed_read_count / read_count * 100
@@ -319,7 +348,14 @@ class SequenceSummaryHandler:
             return "unknown plottype"
 
 
-    def plot_channel_activity(self, plot_width=640, plot_height=480, plot_type="native"):
+    def plot_channel_activity(self, plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
+            
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
         # layout = channel_map.get_platform_map()
         layout = channel_map.get_platform_density()
@@ -410,8 +446,14 @@ class SequenceSummaryHandler:
 
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
-                             annotate_mean=True, annotate_n50=True,
-                             plot_width=640, plot_height=480, plot_type="native"):
+                             annotate_mean=True, annotate_n50=True, 
+                             plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
         # there are some approaches such as np.histogram; seems to split
         # data into clear bins; but not sure on how for stacked ranges ...
         # let's use a few more lines of code and perform manually
@@ -423,12 +465,12 @@ class SequenceSummaryHandler:
 
         longest_read = geometry.get_longest_read()
         boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
-        print(boundaries)
+        logging.debug(boundaries)
         indsP = np.digitize(geometry.get_lengths(), boundaries)
         indsF = np.digitize(geometryF.get_lengths(), boundaries)
         countsP = np.unique(indsP, return_counts=True, return_inverse=True)
         countsF = np.unique(indsF, return_counts=True, return_inverse=True)
-        print(countsP[1])
+        logging.debug(countsP[1])
 
         def count_bases(x, assignments, reads):
             return reads[assignments == x].sum()
@@ -475,13 +517,13 @@ class SequenceSummaryHandler:
             dfP['count'] = dfP['count_line'] + dfP['count']
             dfP = dfP.append(dfF)
 
-        print(dfP)
+        logging.debug(dfP)
 
         plot_base = 'bases_line'
         plot_key = 'bases'
         plot_legend = "count (bases)"
         if not normalised:
-            print("using counts instead of bases!")
+            logging.info("using counts instead of bases!")
             plot_base = 'count_line'
             plot_key = 'count'
             plot_legend = "count (reads)"
@@ -514,12 +556,19 @@ class SequenceSummaryHandler:
         p.xaxis.axis_label = 'Sequence length (nt)'
         p.yaxis.axis_label = plot_legend
         p.yaxis.formatter = NumeralTickFormatter(format="0,0")
+        p.xaxis.formatter = NumeralTickFormatter(format="0,0")
         p.grid.grid_line_color = "white"
 
         return self.handle_output(p, plot_type)
     
 
-    def plot_q_distribution(self, bins=30):
+    def plot_q_distribution(self, bins=30, plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
         # this is a plot, much like the one above ...
 
         q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
@@ -531,7 +580,7 @@ class SequenceSummaryHandler:
         boundaries = np.linspace(q_fail.min(), q_pass.max(), num=bins, endpoint=True, retstep=False)
         indsP = np.digitize(q_pass, boundaries)
         indsF = np.digitize(q_fail, boundaries)
-        print(indsP)
+        logging.debug(indsP)
         countsP = np.unique(indsP, return_counts=True, return_inverse=True)
         countsF = np.unique(indsF, return_counts=True, return_inverse=True)
 
@@ -565,12 +614,14 @@ class SequenceSummaryHandler:
 
         dfP = dfP.append(dfF)
 
-        print(dfP)
+        logging.debug(dfP)
 
         plot_base = 'count_line'
         plot_key = 'count'
         plot_legend = "count (reads)"
-        p = figure(title="Histogram showing distribution of quality values", background_fill_color="lightgrey")
+        p = figure(title="Histogram showing distribution of quality values", 
+                   background_fill_color="lightgrey", plot_width=plot_width,
+                   plot_height=plot_height)
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification', alpha=0.7)
 
@@ -590,11 +641,18 @@ class SequenceSummaryHandler:
         p.yaxis.formatter = NumeralTickFormatter(format="0,0")
         p.grid.grid_line_color = "white"
 
-        export_png(p, filename="plot4.png")
-        return "ThisIsAFilename.png"
+        return self.handle_output(p, plot_type)
+    
 
     def plot_q_l_density(self, xbins=100, ybins=100, longest_read=6000,
-                         highest_q=15, plot_depth_threshold=100):
+                         highest_q=15, plot_depth_threshold=100, 
+                         plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
 
         # a few long reads can skew the figure - shave the data to focus on points of interest
 
@@ -656,7 +714,7 @@ class SequenceSummaryHandler:
         TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
         p = figure(title="Density plot showing relationship between quality and read length",
-                   x_axis_location="below", plot_width=1200, plot_height=800,
+                   x_axis_location="below", plot_width=plot_width, plot_height=plot_height,
                    tools=TOOLS, toolbar_location='below', x_axis_type="log",
                    background_fill_color="lightgrey")
 
@@ -693,10 +751,17 @@ class SequenceSummaryHandler:
         p.xaxis.axis_label = 'Read length (nt)'
         p.yaxis.axis_label = 'Phred score (Q)'
         # show(p)
-        export_png(p, filename="plot5.png")
-        return "ThisIsAFilename.png"
+        return self.handle_output(p, plot_type)
+    
 
-    def plot_time_duty_reads(self, interval_mins=15, cumulative=True):
+    def plot_time_duty_reads(self, interval_mins=15, cumulative=True, 
+                             plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
 
         # seq_sum['start_time'] is measured in seconds
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
@@ -728,7 +793,8 @@ class SequenceSummaryHandler:
             corrected_fail_time_counts = np.cumsum(corrected_fail_time_counts)
 
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
-                      y_axis_label='Sequence reads (n)', background_fill_color="lightgrey")
+                      y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
+                      plot_width=plot_width, plot_height=plot_height)
 
         plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
                   legend_label='Total reads')
@@ -737,10 +803,15 @@ class SequenceSummaryHandler:
         plot.line(boundaries[:-1], corrected_fail_time_counts[1:], line_width=2, line_color='#A6CEE3',
                   legend_label='Failed reads')
 
-        export_png(plot, filename="plot6.png")
-        return "ThisIsAFilename.png"
+        return self.handle_output(plot, plot_type)
 
-    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9]):
+    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9], plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
         """
         This method is much like the plot_time_duty_reads but aggregates the
         sequenced bases into these temporal bins
@@ -793,7 +864,8 @@ class SequenceSummaryHandler:
             failed_bases_by_time = np.cumsum(failed_bases_by_time)
 
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
-                      y_axis_label='Sequence %s (n)' % (scale), background_fill_color="lightgrey")
+                      y_axis_label='Sequence %s (n)' % (scale), background_fill_color="lightgrey",
+                      plot_width=plot_width, plot_height=plot_height)
 
         plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black',
                   legend_label='bases across all reads')
@@ -812,8 +884,8 @@ class SequenceSummaryHandler:
                 # plot.text(x=times, y=bases, text=legend, text_baseline="middle", text_align="left")
                 plot.add_layout(Label(x=times, y=bases, text=legend, text_color='red'))
                 plot.legend.location = "bottom_right"
-        export_png(plot, filename="plot7.png")
-        return "ThisIsAFilename.png"
+        
+        return self.handle_output(plot, plot_type)
 
     def get_sequence_base_point(self, fraction=0.5, interval_mins=5):
         # using numpy interpolate to calculate intersect ...
@@ -828,7 +900,13 @@ class SequenceSummaryHandler:
         target_value = passed_bases_by_time.sum() * fraction
         return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
 
-    def plot_translocation_speed(self, interval_mins=60):
+    def plot_translocation_speed(self, interval_mins=60, plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
         print("plotting translocation speed ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
@@ -848,7 +926,8 @@ class SequenceSummaryHandler:
         lower = q1 - 1.5 * iqr
 
         plot = figure(title='Plot showing sequencing rate against time', x_axis_label='Time (hours)',
-                      y_axis_label='Sequencing rate (bases/s)', background_fill_color="lightgrey")
+                      y_axis_label='Sequencing rate (bases/s)', background_fill_color="lightgrey",
+                      plot_width=plot_width, plot_height=plot_height)
 
         plot.segment(np.unique(sdata['group']), upper, np.unique(sdata['group']), q3, line_color="black")
         plot.segment(np.unique(sdata['group']), lower, np.unique(sdata['group']), q1, line_color="black")
@@ -858,11 +937,15 @@ class SequenceSummaryHandler:
         plot.rect(np.unique(sdata['group']), lower, 0.2, 0.01, line_color="black")
         plot.rect(np.unique(sdata['group']), upper, 0.2, 0.01, line_color="black")
 
-        export_png(plot, filename="plot8.png")
+        return self.handle_output(plot, plot_type)
 
-        return "ThisIsAFilename.png"
-
-    def plot_functional_channels(self, interval_mins=60):
+    def plot_functional_channels(self, interval_mins=60, plot_width=None, plot_height=None, plot_type=None):
+        if plot_width is None:
+            plot_width = self.get_plot_width()
+        if plot_height is None:
+            plot_height = self.get_plot_height()
+        if plot_type is None:
+            plot_type = self.get_plot_type()
         print("plotting active channel count ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=self.get_runtime(units='hours') * 60 / interval_mins + 1,
@@ -877,11 +960,11 @@ class SequenceSummaryHandler:
         time_chunks = np.unique(sdata['group'])
 
         plot = figure(title='Plot showing number of observed channels against time', x_axis_label='Time (hours)',
-                      y_axis_label='Number of active channels (n)))', background_fill_color="lightgrey")
+                      y_axis_label='Number of active channels (n)))', background_fill_color="lightgrey",
+                      plot_width=plot_width, plot_height=plot_height)
 
         plot.step(time_chunks, channel_count, line_width=2, mode="before")
-        export_png(plot, filename="plot9.png")
-        return "ThisIsAFilename.png"
+        return self.handle_output(plot, plot_type)
 
     def is_barcoded_dataset(self):
         """
