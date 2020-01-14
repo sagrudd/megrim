@@ -96,15 +96,7 @@ class InfographicPlot:
         self.scale = scale
 
     def plot_infographic(self):
-        """
-        
 
-        Returns
-        -------
-        str
-            DESCRIPTION.
-
-        """
         # plt.figure(figsize=(self.rows*2, self.columns*5), dpi=50)
         f, axarr = plt.subplots(self.rows, self.columns, sharex=True, sharey=True)
         x = 0
@@ -144,8 +136,8 @@ class InfographicPlot:
         plt.gcf().set_size_inches(self.columns * 5, self.rows * 2.5)
         plt.tight_layout(pad=0.1, w_pad=3, h_pad=1)
         # plt.show()
-        plt.savefig(fname="x.png", dpi=self.dpi)
-        return "ThisIsAFilename.png"
+        # plt.savefig(fname="x.png", dpi=self.dpi)
+
 
     def __str__(self):
         return ("InfographicPlot[%s,%s]" % (self.columns, self.rows))

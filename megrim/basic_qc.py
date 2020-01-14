@@ -11,12 +11,8 @@ import pandas as pd
 import numpy as np
 import math
 import sys
-import re
 import os
-import tempfile
 import atexit
-import gzip
-import bz2
 import matplotlib as mpl
 from scipy import stats
 from megrim.genome_geometry import GenomeGeometry
@@ -28,6 +24,7 @@ from megrim.infographic_plots import InfographicPlot, InfographicNode
 from bokeh.io import export_png, show
 from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, \
     ColumnDataSource
+from bokeh.palettes import (Blues9)
 from bokeh.plotting import figure
 
 
@@ -325,8 +322,8 @@ class SequenceSummaryHandler:
         logging.debug(layout)
 
         # colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
-        colors = Blues_9.hex_colors
-        mapper = LinearColorMapper(palette=colors, low=layout['count'].min(), high=layout['count'].max())
+        colors = Blues9[::-1]
+        mapper = LinearColorMapper(palette=Blues9, low=layout['count'].min(), high=layout['count'].max())
 
         TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
@@ -358,9 +355,9 @@ class SequenceSummaryHandler:
                              title="#reads",
                              label_standoff=6, border_line_color=None, location=(0, 0))
         p.add_layout(color_bar, 'right')
-        # show(p)
-        export_png(p, filename="plot.png")
-        return "ThisIsAFilename.png"
+        show(p)
+        # export_png(p, filename="plot.png")
+        # return "ThisIsAFilename.png"
 
     def library_characteristics_infographic(self):
 
