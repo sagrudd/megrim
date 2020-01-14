@@ -15,6 +15,8 @@ import re
 import os
 import tempfile
 import atexit
+import gzip
+import bz2
 import matplotlib as mpl
 from scipy import stats
 from megrim.genome_geometry import GenomeGeometry
@@ -64,36 +66,26 @@ class SequenceSummaryHandler:
             print("unlinking ", tfile)
             os.remove(tfile)
 
-    def _recover_funky_seqsum(self):
-        print("Creating one temporary file...")
-        fd, path = tempfile.mkstemp()
-        line_no = 0
-        with open(path, 'w') as f:
-            print("Created file is:", fd)
-            print("Name of the file is:", path)
-            # print("tempdir:", tempfile.gettempdir())
-            with open(self.target_file) as origin_file:
-                for line in origin_file:
-                    header = re.findall(r'filename', line)
-                    if header:
-                        if line_no == 0:
-                            f.write(line)
-                    else:
-                        f.write(line)
-                    if line_no == 0:
-                        line_no += 1
-            print("Closing the temp file")
-            os.close(fd)
-            self.temp_files.append(path)
-            return path
-
     def _load_seqsum(self, file=None):
         if file is None:
             file = self.target_file
+        extension = os.path.splitext(file)[1].lower()
+        self.seq_sum = None
+        blocksize = 64000000
+        compression = None
+        if (extension == ".bz2"):
+            logging.warning("reading a bzip2 file - this has performance implications")
+            blocksize = None
+            compression = "bz2"
+        elif (extension in [".gzip", ".gz"]):
+            logging.warning("reading a gzip file - this has performance implications")
+            blocksize = None
+            compression = "gzip"
         self.seq_sum = dd.read_csv(
             file,
             delimiter='\t',
-            blocksize=64000000
+            blocksize=blocksize,
+            compression=compression
         )
         # slice out the head entries for further functionality
         self.seq_sum_head = self.seq_sum.head()
@@ -119,15 +111,51 @@ class SequenceSummaryHandler:
         try:
             self._load_seqsum()
         except ValueError as verr:
-            print("ValueError error: {0}".format(verr))
-            print("ERROR - Loading native file did not work ...")
+            logging.error("ValueError error: {0}".format(verr))
+            logging.error("ERROR - Loading native file did not work ...")
 
-            print("Stripping duplicate rows from filename ...")
-            temp = self._recover_funky_seqsum()
-            self._load_seqsum(temp)
+            extension = os.path.splitext(self.target_file)[1].lower()
+            compression = None
+            blocksize = 6400000
+            if (extension == ".bz2"):
+                compression = "bz2"
+            elif (extension in [".gzip", ".gz"]):
+                compression = "gzip"
+            
+            data = dd.read_csv(self.target_file, delimiter="\t", compression=compression, dtype="object")
+            data = data[~(data["filename"].compute() == 'filename')].compute()
+            # +--------------------------+--------+----------+
+            # | Column                   | Found  | Expected |
+            # +--------------------------+--------+----------+
+            # | channel                  | object | int64    |
+            # | duration                 | object | float64  |
+            # | mad_template             | object | float64  |
+            # | mean_qscore_template     | object | float64  |
+            # | median_template          | object | float64  |
+            # | num_events               | object | int64    |
+            # | num_events_template      | object | int64    |
+            # | sequence_length_template | object | int64    |
+            # | start_time               | object | float64  |
+            # | strand_score_template    | object | float64  |
+            # | template_duration        | object | float64  |
+            # | template_start           | object | float64  |
+            # +--------------------------+--------+----------+
+            type_info = {"channel": "int64",
+                         'start_time': "float64",
+                         'duration': "float64",
+                         'num_events': "int64",
+                         'sequence_length_template': "int64",
+                         'mean_qscore_template': "float64",
+                         }
+            data["passes_filtering"] = (data["passes_filtering"]=='True')
+            for key in type_info.keys():
+                if key in data.columns:
+                    data = data.astype({key: type_info.get(key)})
+            self.seq_sum = dd.from_pandas(data, chunksize=blocksize)
+            self.seq_sum_head = self.seq_sum.head()
 
-
-        except:
+        except Exception as e:
+            print("ValueError error: {0}".format(e))
             print("ERROR - this is an unexpected edge case ...")
             sys.exit(0)
         # start excluding dask columns that are not of core interest
