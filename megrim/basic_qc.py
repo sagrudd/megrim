@@ -21,11 +21,11 @@ from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
 from time import time
 from megrim.infographic_plots import InfographicPlot, InfographicNode
-from bokeh.io import export_png, show
+from bokeh.io import export_png, output_notebook
 from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, \
     ColumnDataSource
 from bokeh.palettes import (Blues9)
-from bokeh.plotting import figure
+from bokeh.plotting import figure, show
 
 
 # import palettable.colorbrewer.sequential
@@ -283,7 +283,7 @@ class SequenceSummaryHandler:
         passed_read_count = self.seq_sum.passes_filtering.sum().compute()
         perc_val = passed_read_count / read_count * 100
 
-        p = figure(plot_width=600, plot_height=400, x_range=(0.25, 1.75), y_range=(0.7, 1.5), toolbar_location=None)
+        p = figure(plot_width=640, plot_height=480, x_range=(0.25, 1.75), y_range=(0.7, 1.5), toolbar_location=None)
 
         start_val = 0
         middle_val = (math.pi / 100) * (100 - perc_val)
@@ -306,9 +306,8 @@ class SequenceSummaryHandler:
         p.axis.visible = False
         p.xgrid.visible = False
         p.ygrid.visible = False
-        show(p)
+        return p
 
-        return "ThisIsAFilename.png"
 
     def plot_channel_activity(self):
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
@@ -323,16 +322,16 @@ class SequenceSummaryHandler:
 
         # colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
         colors = Blues9[::-1]
-        mapper = LinearColorMapper(palette=Blues9, low=layout['count'].min(), high=layout['count'].max())
+        mapper = LinearColorMapper(palette=colors, low=layout['count'].min(), high=layout['count'].max())
 
-        TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
+        TOOLS = "save,reset"
 
         rows = list(layout.row.unique())
         columns = list(layout.column.unique())
 
         p = figure(title="channel activity plot",
                    x_range=columns, y_range=rows,
-                   x_axis_location="above", plot_width=1200, plot_height=800,
+                   x_axis_location="above", plot_width=640, plot_height=480,
                    tools=TOOLS, toolbar_location='below')
 
         p.axis.visible = False
@@ -355,9 +354,7 @@ class SequenceSummaryHandler:
                              title="#reads",
                              label_standoff=6, border_line_color=None, location=(0, 0))
         p.add_layout(color_bar, 'right')
-        show(p)
-        # export_png(p, filename="plot.png")
-        # return "ThisIsAFilename.png"
+        return p
 
     def library_characteristics_infographic(self):
 
@@ -506,8 +503,7 @@ class SequenceSummaryHandler:
         p.yaxis.formatter = NumeralTickFormatter(format="0,0")
         p.grid.grid_line_color = "white"
 
-        export_png(p, filename="plot3.png")
-        return "ThisIsAFilename.png"
+        return p
 
     def plot_q_distribution(self, bins=30):
         # this is a plot, much like the one above ...
