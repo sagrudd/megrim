@@ -952,8 +952,11 @@ class SequenceSummaryHandler:
                                  endpoint=True, retstep=False)
 
         sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
-        sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
-        sdata['group'] = sdata['group'].astype('category')
+        #sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
+        #sdata['group'] = sdata['group'].astype('category')
+        sdata = sdata.reindex(columns=sdata.columns.tolist() + ['group'])
+        sdata.loc[:, "group"] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
+        
         groups = sdata.groupby('group')
 
         channel_count = groups['channel'].nunique()
