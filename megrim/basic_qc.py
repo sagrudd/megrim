@@ -409,7 +409,7 @@ class SequenceSummaryHandler(Flounder):
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
                              annotate_mean=True, annotate_n50=True, 
-                             max_length=None, **kwargs):
+                             longest_read=None, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # there are some approaches such as np.histogram; seems to split
@@ -421,9 +421,9 @@ class SequenceSummaryHandler(Flounder):
         geometryF = GenomeGeometry(
             pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
 
-        longest_read = geometry.get_longest_read()
-        if max_length is None:
-            max_length = longest_read
+        if longest_read is None:
+            longest_read = geometry.get_longest_read()
+
         boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
         logging.debug(boundaries)
         indsP = np.digitize(geometry.get_lengths(), boundaries)
@@ -491,7 +491,7 @@ class SequenceSummaryHandler(Flounder):
         p = figure(title="Histogram showing read-length distribution", 
                    background_fill_color="lightgrey", plot_width=plot_width, 
                    plot_height=plot_height, tools=plot_tools,
-                   x_range=Range1d(0, max_length))
+                   x_range=Range1d(0, longest_read))
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification')
 
