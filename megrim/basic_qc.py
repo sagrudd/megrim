@@ -500,7 +500,7 @@ class SequenceSummaryHandler(Flounder):
             p.renderers.extend([vline])
             p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
                                   source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()],
-                                                                    y=[dfP['count'].max()],
+                                                                    y=[dfP[plot_key].max()],
                                                                     text=['Mean'])),
                                   render_mode='canvas', text_align='right', text_color="red"))
 
@@ -509,7 +509,7 @@ class SequenceSummaryHandler(Flounder):
             p.renderers.extend([vline])
             p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
                                   source=ColumnDataSource(data=dict(x=[geometry.get_n_value()],
-                                                                    y=[dfP['count'].max()],
+                                                                    y=[dfP[plot_key].max()],
                                                                     text=['N50'])),
                                   render_mode='canvas', text_align='left', text_color="orange"))
         p.y_range.start = 0
