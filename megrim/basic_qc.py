@@ -331,15 +331,13 @@ class SequenceSummaryHandler(Flounder):
         colors = Blues9[::-1]
         mapper = LinearColorMapper(palette=colors, low=layout['count'].min(), high=layout['count'].max())
 
-        TOOLS = "save,reset"
-
         rows = list(layout.row.unique())
         columns = list(layout.column.unique())
 
         p = figure(title="channel activity plot",
                    x_range=columns, y_range=rows,
                    x_axis_location="above", plot_width=plot_width, plot_height=plot_height,
-                   tools=TOOLS, toolbar_location='below')
+                   tools="save,reset", toolbar_location='below')
 
         p.axis.visible = False
         p.grid.grid_line_color = None
@@ -486,7 +484,7 @@ class SequenceSummaryHandler(Flounder):
 
         p = figure(title="Histogram showing read-length distribution", 
                    background_fill_color="lightgrey", plot_width=plot_width, 
-                   plot_height=plot_height)
+                   plot_height=plot_height, tools="save,reset")
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification')
 
@@ -571,7 +569,7 @@ class SequenceSummaryHandler(Flounder):
         plot_legend = "count (reads)"
         p = figure(title="Histogram showing distribution of quality values", 
                    background_fill_color="lightgrey", plot_width=plot_width,
-                   plot_height=plot_height)
+                   plot_height=plot_height, tools="save,reset")
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification', alpha=0.7)
 
@@ -655,11 +653,9 @@ class SequenceSummaryHandler(Flounder):
         # colors = Inferno256
         mapper = LinearColorMapper(palette=colors, low=layout['count'].min() + 1, high=layout['count'].max())
 
-        TOOLS = "hover,save,pan,box_zoom,reset,wheel_zoom"
-
         p = figure(title="Density plot showing relationship between quality and read length",
                    x_axis_location="below", plot_width=plot_width, plot_height=plot_height,
-                   tools=TOOLS, toolbar_location='below', x_axis_type="log",
+                   tools="save,reset", toolbar_location='below', x_axis_type="log",
                    background_fill_color="lightgrey")
 
         p.title.text_font_size = '18pt'
@@ -732,7 +728,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height)
+                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
         plot.yaxis.formatter = NumeralTickFormatter(format="0,0")
         plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
                   legend_label='Total reads')
@@ -784,7 +780,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence %s (n)' % (scale), background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height)
+                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
 
         plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black',
                   legend_label='bases across all reads')
@@ -846,7 +842,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing sequencing rate against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequencing rate (bases/s)', background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height)
+                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
 
         plot.segment(np.unique(sdata['group']), upper, np.unique(sdata['group']), q3, line_color="black")
         plot.segment(np.unique(sdata['group']), lower, np.unique(sdata['group']), q1, line_color="black")
@@ -879,7 +875,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing number of observed channels against time', x_axis_label='Time (hours)',
                       y_axis_label='Number of active channels (n)', background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height)
+                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
 
         plot.step(time_chunks, channel_count, line_width=2, mode="before")
         return self.handle_output(plot, plot_type)

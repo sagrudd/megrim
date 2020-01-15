@@ -5,6 +5,7 @@ from .project_selector import project_selector
 from .reference_data_registry import reference_data_registry
 from .scan_content import ScanContent
 from .basic_qc import SequenceSummaryHandler
-from .environment import tutorial_branding
+from .environment import tutorial_branding, get_megrim_version
 
-print("%s(%s)" % (__name__, "xx"))
+get_megrim_version()
+

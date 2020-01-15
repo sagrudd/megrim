@@ -12,9 +12,11 @@ scripts and results in a peripheral location
 """
 
 import logging
-from pkg_resources import resource_string
+import re
+from pkg_resources import resource_string, get_distribution, resource_filename
 from IPython.display import Image, display, Markdown 
 from bokeh.plotting import show
+import pathlib
 
 class Flounder:
     """
@@ -85,6 +87,19 @@ class Flounder:
         logging.debug(tres)
         return tres
     
+
+def get_megrim_version():
+    try:
+        distribution = get_distribution("megrim")
+        print("%s(%s)" % (distribution.key, distribution.version))
+    except:
+        logging.warning("megrim package may not be installed")
+        txt_chunk = open((pathlib.Path(resource_filename('megrim', 'data')).parent.parent / "setup.py").as_posix()).read()
+        txt_lines = txt_chunk.splitlines()
+        print("%s(%s)" % (
+            re.findall('(?<=name=\')[^\']+', list(filter(lambda x: 'name=' in x, txt_lines))[0])[0], 
+            re.findall('(?<=version=\')[^\']+', list(filter(lambda x: 'version=' in x, txt_lines))[0])[0]))
+
 
 def tutorial_branding(tutorial=None, legend=None, 
                       telemetry=None):
