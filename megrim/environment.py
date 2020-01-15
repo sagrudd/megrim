@@ -11,8 +11,10 @@ a user may be working in a non-persistent workspace with primary data,
 scripts and results in a peripheral location
 """
 
+import logging
 from pkg_resources import resource_string
 from IPython.display import Image, display, Markdown 
+from bokeh.plotting import show
 
 class Flounder:
     """
@@ -54,6 +56,34 @@ class Flounder:
     
     def get_plot_type(self):
         return self.plot_type
+        
+    def handle_output(self, p, plot_type):
+        if plot_type == 'native':
+            return p
+        elif plot_type == 'jupyter':
+            show(p)
+            return None
+        else:
+            return "unknown plottype"
+    
+    def handle_kwargs(self, fields, **kwargs):
+        stuff = []
+        for f in fields:
+            if f in kwargs.keys():
+                stuff.append(kwargs.get(f))
+            else:
+                if f == "plot_width":
+                    stuff.append(self.get_plot_width())
+                elif f == "plot_height":
+                    stuff.append(self.get_plot_height())
+                elif f == "plot_type":
+                    stuff.append(self.get_plot_type())
+                else:
+                    logging.warning("[%s] is an unknown and undefined variable" % (f))
+                    stuff.append(None)
+        tres = tuple(stuff)
+        logging.debug(tres)
+        return tres
     
 
 def tutorial_branding(tutorial=None, legend=None, 
@@ -70,7 +100,6 @@ def tutorial_branding(tutorial=None, legend=None,
             return "terminal"
         
     framework = get_framework()
-    print(framework)
     if framework == "jupyter":
         display(Image(resource_string(__name__, 'data/ONT_logo.png')))
         if legend != None:

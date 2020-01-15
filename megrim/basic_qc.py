@@ -112,7 +112,7 @@ class SequenceSummaryHandler(Flounder):
             self._load_seqsum()
         except ValueError as verr:
             logging.debug("ValueError error: {0}".format(verr))
-            logging.info("ERROR - Loading native file did not work ...")
+            logging.warning("Dask ValueError during import - filtering for duplicate headers")
 
             extension = os.path.splitext(self.target_file)[1].lower()
             compression = None
@@ -281,13 +281,8 @@ class SequenceSummaryHandler(Flounder):
             runtime = take_closest(canonical_runs, runtime)
         return (runtime * scale["hours"]) / scale[units]
 
-    def plot_passed_gauge(self, plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
+    def plot_passed_gauge(self, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
         
         read_count = len(self.seq_sum)
         passed_read_count = self.seq_sum.passes_filtering.sum().compute()
@@ -319,24 +314,9 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
 
 
-    def handle_output(self, p, plot_type):
-        if plot_type == 'native':
-            return p
-        elif plot_type == 'jupyter':
-            show(p)
-            return None
-        else:
-            return "unknown plottype"
-
-
-    def plot_channel_activity(self, plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
-            
+    def plot_channel_activity(self, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
         # layout = channel_map.get_platform_map()
         layout = channel_map.get_platform_density()
@@ -427,14 +407,9 @@ class SequenceSummaryHandler(Flounder):
 
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
-                             annotate_mean=True, annotate_n50=True, 
-                             plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
+                             annotate_mean=True, annotate_n50=True, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        
         # there are some approaches such as np.histogram; seems to split
         # data into clear bins; but not sure on how for stacked ranges ...
         # let's use a few more lines of code and perform manually
@@ -543,14 +518,8 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
     
 
-    def plot_q_distribution(self, bins=30, plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
-        # this is a plot, much like the one above ...
+    def plot_q_distribution(self, bins=30, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
 
         q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
         q_pass = q_pass.sort_values(ascending=False).reset_index(drop=True)
@@ -626,15 +595,9 @@ class SequenceSummaryHandler(Flounder):
     
 
     def plot_q_l_density(self, xbins=100, ybins=100, longest_read=6000,
-                         highest_q=15, plot_depth_threshold=100, 
-                         plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
-
+                         highest_q=15, plot_depth_threshold=100, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        
         # a few long reads can skew the figure - shave the data to focus on points of interest
 
         q_boundaries = np.linspace(2, highest_q, num=ybins, endpoint=True, retstep=False)
@@ -735,15 +698,9 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
     
 
-    def plot_time_duty_reads(self, interval_mins=15, cumulative=True, 
-                             plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
-
+    def plot_time_duty_reads(self, interval_mins=15, cumulative=True, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        
         # seq_sum['start_time'] is measured in seconds
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
@@ -786,27 +743,8 @@ class SequenceSummaryHandler(Flounder):
 
         return self.handle_output(plot, plot_type)
 
-    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9], plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
-        """
-        This method is much like the plot_time_duty_reads but aggregates the
-        sequenced bases into these temporal bins
-
-        Parameters
-        ----------
-        interval_mins : TYPE, optional
-            DESCRIPTION. The default is 15.
-
-        Returns
-        -------
-        None.
-
-        """
+    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9], **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
 
         # validate the scale ...
         scaleVal = 1
@@ -881,13 +819,9 @@ class SequenceSummaryHandler(Flounder):
         target_value = passed_bases_by_time.sum() * fraction
         return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
 
-    def plot_translocation_speed(self, interval_mins=60, plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
+    def plot_translocation_speed(self, interval_mins=60, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        
         #print("plotting translocation speed ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
@@ -924,13 +858,9 @@ class SequenceSummaryHandler(Flounder):
 
         return self.handle_output(plot, plot_type)
 
-    def plot_functional_channels(self, interval_mins=60, plot_width=None, plot_height=None, plot_type=None):
-        if plot_width is None:
-            plot_width = self.get_plot_width()
-        if plot_height is None:
-            plot_height = self.get_plot_height()
-        if plot_type is None:
-            plot_type = self.get_plot_type()
+    def plot_functional_channels(self, interval_mins=60, **kwargs):
+        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        
         #print("plotting active channel count ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
