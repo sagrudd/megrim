@@ -16,6 +16,7 @@ import atexit
 import matplotlib as mpl
 from scipy import stats
 from megrim.genome_geometry import GenomeGeometry
+from megrim.environment import Flounder
 from bisect import bisect_left
 from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
@@ -49,13 +50,11 @@ class Timer():
         print(self.message.format(m))
 
 
-class SequenceSummaryHandler:
+class SequenceSummaryHandler(Flounder):
 
-    def __init__(self, target_file, plot_width=640, plot_height=480, plot_type="native"):
+    def __init__(self, target_file):
+        Flounder.__init__(self)
         self.target_file = target_file
-        self.plot_width = plot_width
-        self.plot_height = plot_height
-        self.plot_type = plot_type
         self.temp_files = []
         atexit.register(self.cleanup)
         self._import_data()
@@ -90,24 +89,6 @@ class SequenceSummaryHandler:
         # slice out the head entries for further functionality
         self.seq_sum_head = self.seq_sum.head()
 
-
-    def set_plot_width(self, plot_width):
-        self.plot_width = plot_width
-        
-    def set_plot_height(self, plot_height):
-        self.plot_height = plot_height
-        
-    def set_plot_type(self, plot_type):
-        self.plot_type = plot_type
-        
-    def get_plot_height(self):
-        return self.plot_height
-    
-    def get_plot_width(self):
-        return self.plot_width
-    
-    def get_plot_type(self):
-        return self.plot_type
 
     def _import_data(self):
         """
@@ -795,7 +776,7 @@ class SequenceSummaryHandler:
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height)
-
+        plot.yaxis.formatter = NumeralTickFormatter(format="0,0")
         plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
                   legend_label='Total reads')
         plot.line(boundaries[:-1], corrected_pass_time_counts[1:], line_width=2, line_color='#1F78B4',
@@ -907,7 +888,7 @@ class SequenceSummaryHandler:
             plot_height = self.get_plot_height()
         if plot_type is None:
             plot_type = self.get_plot_type()
-        print("plotting translocation speed ...")
+        #print("plotting translocation speed ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
@@ -950,7 +931,7 @@ class SequenceSummaryHandler:
             plot_height = self.get_plot_height()
         if plot_type is None:
             plot_type = self.get_plot_type()
-        print("plotting active channel count ...")
+        #print("plotting active channel count ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)

@@ -24,14 +24,35 @@ class Flounder:
     persistence of analysis states where possible
     """
 
-    def __init__(self):
-        self.location = ''
+    def __init__(self, plot_width=640, plot_height=480, plot_type="native"):
+        self.location = None
+        self.plot_width = plot_width
+        self.plot_height = plot_height
+        self.plot_type = plot_type
 
     def set_path(self, path):
         self.location = path
 
     def get_path(self):
         return self.location
+    
+    def set_plot_width(self, plot_width):
+        self.plot_width = plot_width
+        
+    def set_plot_height(self, plot_height):
+        self.plot_height = plot_height
+        
+    def set_plot_type(self, plot_type):
+        self.plot_type = plot_type
+        
+    def get_plot_height(self):
+        return self.plot_height
+    
+    def get_plot_width(self):
+        return self.plot_width
+    
+    def get_plot_type(self):
+        return self.plot_type
     
 
 def get_branding_logo(telemetry=None):
