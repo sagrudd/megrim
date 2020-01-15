@@ -22,11 +22,11 @@ from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
 from time import time
 from megrim.infographic_plots import InfographicPlot, InfographicNode
-from bokeh.io import export_png
+# from bokeh.io import export_png
 from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, \
-    ColumnDataSource
+    ColumnDataSource, Range1d
 from bokeh.palettes import (Blues9)
-from bokeh.plotting import figure, show
+from bokeh.plotting import figure
 
 
 # import palettable.colorbrewer.sequential
@@ -408,7 +408,8 @@ class SequenceSummaryHandler(Flounder):
 
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
-                             annotate_mean=True, annotate_n50=True, **kwargs):
+                             annotate_mean=True, annotate_n50=True, 
+                             max_length=None, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # there are some approaches such as np.histogram; seems to split
@@ -421,6 +422,8 @@ class SequenceSummaryHandler(Flounder):
             pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
 
         longest_read = geometry.get_longest_read()
+        if max_length is None:
+            max_length = longest_read
         boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
         logging.debug(boundaries)
         indsP = np.digitize(geometry.get_lengths(), boundaries)
@@ -487,7 +490,8 @@ class SequenceSummaryHandler(Flounder):
 
         p = figure(title="Histogram showing read-length distribution", 
                    background_fill_color="lightgrey", plot_width=plot_width, 
-                   plot_height=plot_height, tools=plot_tools)
+                   plot_height=plot_height, tools=plot_tools,
+                   x_range=Range1d(0, max_length))
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification')
 
