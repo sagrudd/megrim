@@ -582,11 +582,8 @@ class SequenceSummaryHandler(Flounder):
 
         vline = Span(location=7, dimension='height', line_color='green', line_width=2)
         p.renderers.extend([vline])
-        p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[7],
-                                                                                                          y=[dfP[
-                                                                                                                 'count'].max()],
-                                                                                                          text=[
-                                                                                                              'Q-filter'])),
+        p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', 
+                              source=ColumnDataSource(data=dict(x=[7], y=[dfP['count'].max()], text=['Q-filter'])),
                               render_mode='canvas', text_align='left', text_color="green"))
 
         p.y_range.start = 0
@@ -686,14 +683,14 @@ class SequenceSummaryHandler(Flounder):
             LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[longest_read],
                                                                                                  y=[7],
                                                                                                  text=['Q-filter'])),
-                     render_mode='canvas', text_align='right', text_color="green"))
+                     render_mode='css', text_align='right', text_color="green"))
 
         vline = Span(location=geometry.get_mean_length(), dimension='height', line_color='red', line_width=2)
         p.renderers.extend([vline])
-        # p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()],
-        #                            y=highest_q,
-        #                            text=['Mean'])), 
-        #                      render_mode='canvas', text_align='right', text_color="red"))
+        p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', 
+                              source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()], y=[highest_q], text=['Mean'])),
+                              render_mode='css', text_align='left', text_color="red"))
+        
         p.xaxis.formatter = NumeralTickFormatter(format="0,0")
         p.xaxis.axis_label = 'Read length (nt)'
         p.yaxis.axis_label = 'Phred score (Q)'
