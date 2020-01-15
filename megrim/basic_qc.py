@@ -694,7 +694,9 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
     
 
-    def plot_time_duty_reads(self, interval_mins=15, cumulative=True, **kwargs):
+    def plot_time_duty_reads(self, interval_mins=15, cumulative=True, 
+                             include_total=False, include_failed=True, 
+                             **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # seq_sum['start_time'] is measured in seconds
@@ -730,18 +732,20 @@ class SequenceSummaryHandler(Flounder):
                       y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
         plot.yaxis.formatter = NumeralTickFormatter(format="0,0")
-        plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
-                  legend_label='Total reads')
+        if include_total:
+            plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
+                      legend_label='Total reads')
         plot.line(boundaries[:-1], corrected_pass_time_counts[1:], line_width=2, line_color='#1F78B4',
                   legend_label='Passed reads')
-        plot.line(boundaries[:-1], corrected_fail_time_counts[1:], line_width=2, line_color='#A6CEE3',
-                  legend_label='Failed reads')
+        if include_failed:
+            plot.line(boundaries[:-1], corrected_fail_time_counts[1:], line_width=2, line_color='#A6CEE3',
+                      legend_label='Failed reads')
 
         return self.handle_output(plot, plot_type)
 
     def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", 
                              cumulative=True, milestones=[0.5, 0.9], 
-                             include_total=False, include_failed=False,
+                             include_total=False, include_failed=True,
                              **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
