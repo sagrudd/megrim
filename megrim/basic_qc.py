@@ -282,13 +282,13 @@ class SequenceSummaryHandler(Flounder):
         return (runtime * scale["hours"]) / scale[units]
 
     def plot_passed_gauge(self, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         read_count = len(self.seq_sum)
         passed_read_count = self.seq_sum.passes_filtering.sum().compute()
         perc_val = passed_read_count / read_count * 100
 
-        p = figure(plot_width=plot_width, plot_height=plot_height, x_range=(0.25, 1.75), y_range=(0.7, 1.5), toolbar_location=None)
+        p = figure(plot_width=plot_width, plot_height=plot_height, x_range=(0.25, 1.75), y_range=(0.7, 1.5), tools=plot_tools)
 
         start_val = 0
         middle_val = (math.pi / 100) * (100 - perc_val)
@@ -315,7 +315,7 @@ class SequenceSummaryHandler(Flounder):
 
 
     def plot_channel_activity(self, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
         # layout = channel_map.get_platform_map()
@@ -337,7 +337,7 @@ class SequenceSummaryHandler(Flounder):
         p = figure(title="channel activity plot",
                    x_range=columns, y_range=rows,
                    x_axis_location="above", plot_width=plot_width, plot_height=plot_height,
-                   tools="save,reset", toolbar_location='below')
+                   tools=plot_tools, toolbar_location='below')
 
         p.axis.visible = False
         p.grid.grid_line_color = None
@@ -406,7 +406,7 @@ class SequenceSummaryHandler(Flounder):
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
                              annotate_mean=True, annotate_n50=True, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # there are some approaches such as np.histogram; seems to split
         # data into clear bins; but not sure on how for stacked ranges ...
@@ -484,7 +484,7 @@ class SequenceSummaryHandler(Flounder):
 
         p = figure(title="Histogram showing read-length distribution", 
                    background_fill_color="lightgrey", plot_width=plot_width, 
-                   plot_height=plot_height, tools="save,reset")
+                   plot_height=plot_height, tools=plot_tools)
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification')
 
@@ -517,8 +517,8 @@ class SequenceSummaryHandler(Flounder):
     
 
     def plot_q_distribution(self, bins=30, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
-
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        
         q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
         q_pass = q_pass.sort_values(ascending=False).reset_index(drop=True)
 
@@ -569,7 +569,7 @@ class SequenceSummaryHandler(Flounder):
         plot_legend = "count (reads)"
         p = figure(title="Histogram showing distribution of quality values", 
                    background_fill_color="lightgrey", plot_width=plot_width,
-                   plot_height=plot_height, tools="save,reset")
+                   plot_height=plot_height, tools=plot_tools)
         p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification', alpha=0.7)
 
@@ -594,7 +594,7 @@ class SequenceSummaryHandler(Flounder):
 
     def plot_q_l_density(self, xbins=100, ybins=100, longest_read=6000,
                          highest_q=15, plot_depth_threshold=100, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # a few long reads can skew the figure - shave the data to focus on points of interest
 
@@ -655,7 +655,7 @@ class SequenceSummaryHandler(Flounder):
 
         p = figure(title="Density plot showing relationship between quality and read length",
                    x_axis_location="below", plot_width=plot_width, plot_height=plot_height,
-                   tools="save,reset", toolbar_location='below', x_axis_type="log",
+                   tools=plot_tools, toolbar_location='below', x_axis_type="log",
                    background_fill_color="lightgrey")
 
         p.title.text_font_size = '18pt'
@@ -695,7 +695,7 @@ class SequenceSummaryHandler(Flounder):
     
 
     def plot_time_duty_reads(self, interval_mins=15, cumulative=True, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # seq_sum['start_time'] is measured in seconds
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
@@ -728,7 +728,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
+                      plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
         plot.yaxis.formatter = NumeralTickFormatter(format="0,0")
         plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
                   legend_label='Total reads')
@@ -740,8 +740,8 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(plot, plot_type)
 
     def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9], **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
-
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        
         # validate the scale ...
         scaleVal = 1
         if scale == "Gigabases":
@@ -780,7 +780,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence %s (n)' % (scale), background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
+                      plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
         plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black',
                   legend_label='bases across all reads')
@@ -816,7 +816,7 @@ class SequenceSummaryHandler(Flounder):
         return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
 
     def plot_translocation_speed(self, interval_mins=60, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         #print("plotting translocation speed ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
@@ -842,7 +842,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing sequencing rate against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequencing rate (bases/s)', background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
+                      plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
         plot.segment(np.unique(sdata['group']), upper, np.unique(sdata['group']), q3, line_color="black")
         plot.segment(np.unique(sdata['group']), lower, np.unique(sdata['group']), q1, line_color="black")
@@ -855,7 +855,7 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(plot, plot_type)
 
     def plot_functional_channels(self, interval_mins=60, **kwargs):
-        (plot_width, plot_height, plot_type) = self.handle_kwargs(["plot_width", "plot_height", "plot_type"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         #print("plotting active channel count ...")
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
@@ -875,7 +875,7 @@ class SequenceSummaryHandler(Flounder):
 
         plot = figure(title='Plot showing number of observed channels against time', x_axis_label='Time (hours)',
                       y_axis_label='Number of active channels (n)', background_fill_color="lightgrey",
-                      plot_width=plot_width, plot_height=plot_height, tools="save,reset")
+                      plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
         plot.step(time_chunks, channel_count, line_width=2, mode="before")
         return self.handle_output(plot, plot_type)
