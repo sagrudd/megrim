@@ -385,13 +385,13 @@ class SequenceSummaryHandler(Flounder):
         # df$key <- c("Mean Read Length (nt)","N50","Mean Read Quality (QV)","Mean Failed QV","Longest Read")
         # df$icon <- fontawesome(c("fa-bar-chart", "fa-play", "fa-area-chart", "fa-bug", "fa-sort"))
 
-        mean_read_length_node = InfographicNode(legend="Mean Read Length (nt)",
+        mean_read_length_node = InfographicNode(legend="Mean Read Length",
                                                 value="{:.2f}".format(mean_read_length),
                                                 graphic='map-signs')
         read_n50_length_node = InfographicNode(legend="N50",
                                                value="{:,}".format(read_n50_length),
                                                graphic='bullseye')
-        passed_mean_q_node = InfographicNode(legend="Mean Read Quality (QV)",
+        passed_mean_q_node = InfographicNode(legend="Mean Read Quality",
                                              value="{:.2f}".format(passed_mean_q),
                                              graphic='award')
         failed_mean_q_node = InfographicNode(legend="Mean Failed QV",

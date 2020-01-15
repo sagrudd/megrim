@@ -97,7 +97,8 @@ class InfographicPlot:
     def plot_infographic(self, plot_width, dpi=96):
 
         # plt.figure(figsize=(self.rows*2, self.columns*5), dpi=50)
-        f, axarr = plt.subplots(self.rows, self.columns, sharex=True, sharey=True)
+        f, axarr = plt.subplots(self.rows, self.columns, sharex=True, 
+                                sharey=True, constrained_layout=False)
         x = 0
         y = 0
         fontA = 48 / self.columns * plot_width / 640
@@ -133,13 +134,15 @@ class InfographicPlot:
         plt.axis('off')
 
         #plt.gcf().set_size_inches(self.columns * 5, self.rows * 2.5)
-        plt.gcf().set_size_inches(plot_width/dpi, plot_width/dpi/self.columns/2)
+        plt.gcf().set_size_inches(plot_width/dpi, plot_width/dpi/self.columns/1.5)
         
         logging.debug("plot_width = %s @%s" % (plot_width, dpi))
         logging.debug("panel dimension = %s x %s" % (self.columns, self.rows))
         logging.debug(plt.gcf().get_size_inches())
         
-        plt.tight_layout(pad=0.2)
+        plt.subplots_adjust(left=0.05, right=0.95, bottom=0.05, top=0.95, wspace=0.05, hspace=0.05)
+        
+        #plt.tight_layout(pad=0.2)
         # plt.show()
         # plt.savefig(fname="x.png", dpi=self.dpi)
 
