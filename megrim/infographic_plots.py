@@ -100,9 +100,9 @@ class InfographicPlot:
         f, axarr = plt.subplots(self.rows, self.columns, sharex=True, sharey=True)
         x = 0
         y = 0
-        fontA = 48 / self.columns
-        fontB = 32 / self.columns
-        ImageC = 96 / self.columns
+        fontA = 48 / self.columns * plot_width / 640
+        fontB = 32 / self.columns * plot_width / 640
+        ImageC = 96 / self.columns * plot_width / 640
         for infographic_node in self.plot_content:
             # rect is a hack to shade the background of the infographic due to
             # known (and unfixed) bug 
