@@ -30,12 +30,13 @@ class Flounder:
     """
 
     def __init__(self, plot_width=640, plot_height=480, plot_type="native", 
-                 plot_tools="save,reset"):
+                 plot_tools="save,reset", plot_dpi=96):
         self.location = None
         self.plot_width = plot_width
         self.plot_height = plot_height
         self.plot_type = plot_type
         self.plot_tools = plot_tools
+        self.plot_dpi = plot_dpi
 
     def set_path(self, path):
         self.location = path
@@ -55,6 +56,9 @@ class Flounder:
     def set_plot_tools(self, plot_tools):
         self.plot_tools = plot_tools
         
+    def set_plot_dpi(self, plot_dpi):
+        self.plot_dpi = plot_dpi
+        
     def get_plot_height(self):
         return self.plot_height
     
@@ -66,6 +70,9 @@ class Flounder:
     
     def get_plot_tools(self):
         return self.plot_tools
+    
+    def get_plot_dpi(self):
+        return self.plot_dpi
         
     def handle_output(self, p, plot_type):
         if plot_type == 'native':
@@ -90,6 +97,8 @@ class Flounder:
                     stuff.append(self.get_plot_type())
                 elif f == "plot_tools":
                     stuff.append(self.get_plot_tools())
+                elif f == "plot_dpi":
+                    stuff.append(self.get_plot_dpi())
                 else:
                     logging.warning("[%s] is an unknown and undefined variable" % (f))
                     stuff.append(None)

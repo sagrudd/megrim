@@ -15,6 +15,7 @@ on a plane easyjet TXL-LGW
 @author: srudd
 """
 
+import logging
 import fontawesome as fa
 from matplotlib.font_manager import FontProperties
 import matplotlib.pyplot as plt
@@ -88,22 +89,20 @@ class InfographicNode:
 
 class InfographicPlot:
 
-    def __init__(self, plot_content, rows=1, columns=3, dpi=100, scale=1.7):
+    def __init__(self, plot_content, rows=1, columns=3):
         self.plot_content = plot_content
         self.rows = rows
         self.columns = columns
-        self.dpi = dpi
-        self.scale = scale
 
-    def plot_infographic(self):
+    def plot_infographic(self, plot_width, dpi=96):
 
         # plt.figure(figsize=(self.rows*2, self.columns*5), dpi=50)
         f, axarr = plt.subplots(self.rows, self.columns, sharex=True, sharey=True)
         x = 0
         y = 0
-        fontA = 48 / self.scale
-        fontB = 32 / self.scale
-        ImageC = 96 / self.scale
+        fontA = 48 / self.columns
+        fontB = 32 / self.columns
+        ImageC = 96 / self.columns
         for infographic_node in self.plot_content:
             # rect is a hack to shade the background of the infographic due to
             # known (and unfixed) bug 
@@ -133,8 +132,14 @@ class InfographicPlot:
                 x += 1
         plt.axis('off')
 
-        plt.gcf().set_size_inches(self.columns * 5, self.rows * 2.5)
-        plt.tight_layout(pad=0.1, w_pad=3, h_pad=1)
+        #plt.gcf().set_size_inches(self.columns * 5, self.rows * 2.5)
+        plt.gcf().set_size_inches(plot_width/dpi, plot_width/dpi/self.columns/2)
+        
+        logging.debug("plot_width = %s @%s" % (plot_width, dpi))
+        logging.debug("panel dimension = %s x %s" % (self.columns, self.rows))
+        logging.debug(plt.gcf().get_size_inches())
+        
+        plt.tight_layout(pad=0.2)
         # plt.show()
         # plt.savefig(fname="x.png", dpi=self.dpi)
 

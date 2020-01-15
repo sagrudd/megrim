@@ -208,7 +208,7 @@ class SequenceSummaryHandler(Flounder):
         # print(("_", fastq_id))
         return fastq_id
 
-    def executive_summary(self):
+    def executive_summary(self, **kwargs):
         """
         Method prepares a three panel infographic plot that summarises the
         flowcell, reads and bases sequenced within the associated run
@@ -219,6 +219,7 @@ class SequenceSummaryHandler(Flounder):
             DESCRIPTION.
 
         """
+        (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
         read_count = len(self.seq_sum)
         total_bases = self.seq_sum['sequence_length_template'].sum().compute()
         # passed_bases = self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].sum().compute()
@@ -236,7 +237,7 @@ class SequenceSummaryHandler(Flounder):
                                      graphic='flag-checkered')
         infographic_data = [flowcell_node, readcount_node, gb_seq_val]
         ip = InfographicPlot(infographic_data, rows=1, columns=3)
-        return ip.plot_infographic()
+        return ip.plot_infographic(plot_width, plot_dpi)
 
     def get_absolute_runtime(self):
         max_time = self.seq_sum['start_time'].max().compute()
@@ -361,8 +362,10 @@ class SequenceSummaryHandler(Flounder):
         p.add_layout(color_bar, 'right')
         return self.handle_output(p, plot_type)
 
-    def library_characteristics_infographic(self):
+    def library_characteristics_infographic(self, **kwargs):
 
+        (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
+        
         geometry = GenomeGeometry(
             pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
         longest_read = geometry.get_longest_read()
@@ -401,7 +404,7 @@ class SequenceSummaryHandler(Flounder):
                             passed_mean_q_node, failed_mean_q_node,
                             longest_read_node]
         ip = InfographicPlot(infographic_data, rows=1, columns=5)
-        return ip.plot_infographic()
+        return ip.plot_infographic(plot_width, plot_dpi)
 
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
