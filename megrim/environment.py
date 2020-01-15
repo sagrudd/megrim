@@ -12,6 +12,7 @@ scripts and results in a peripheral location
 """
 
 from pkg_resources import resource_string
+from IPython.display import Image, display, Markdown 
 
 class Flounder:
     """
@@ -55,5 +56,23 @@ class Flounder:
         return self.plot_type
     
 
-def get_branding_logo(telemetry=None):
-    return resource_string(__name__, 'data/ONT_logo.png')
+def tutorial_branding(tutorial=None, legend=None, 
+                      telemetry=None):
+    
+    def get_framework():
+        try:
+            ipy_str = str(type(get_ipython()))
+            if 'zmqshell' in ipy_str:
+                return "jupyter"
+            if 'terminal' in ipy_str:
+                return 'ipython'
+        except:
+            return "terminal"
+        
+    framework = get_framework()
+    print(framework)
+    if framework == "jupyter":
+        display(Image(resource_string(__name__, 'data/ONT_logo.png')))
+        if legend != None:
+            display(Markdown("# "+legend))
+        
