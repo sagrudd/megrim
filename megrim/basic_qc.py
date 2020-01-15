@@ -739,7 +739,10 @@ class SequenceSummaryHandler(Flounder):
 
         return self.handle_output(plot, plot_type)
 
-    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", cumulative=True, milestones=[0.5, 0.9], **kwargs):
+    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", 
+                             cumulative=True, milestones=[0.5, 0.9], 
+                             include_total=False, include_failed=False,
+                             **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         # validate the scale ...
@@ -782,12 +785,14 @@ class SequenceSummaryHandler(Flounder):
                       y_axis_label='Sequence %s (n)' % (scale), background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
-        plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black',
-                  legend_label='bases across all reads')
+        if include_total:
+            plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black', 
+                      legend_label='bases across all reads')
         plot.line(boundaries[:-1], passed_bases_by_time, line_width=2, line_color='#1F78B4',
                   legend_label='bases from passed reads')
-        plot.line(boundaries[:-1], failed_bases_by_time, line_width=2, line_color='#A6CEE3',
-                  legend_label='bases from failed reads')
+        if include_failed:
+            plot.line(boundaries[:-1], failed_bases_by_time, line_width=2, line_color='#A6CEE3', 
+                      legend_label='bases from failed reads')
 
         if cumulative:
             for milestone in milestones:
@@ -798,7 +803,7 @@ class SequenceSummaryHandler(Flounder):
                 plot.line([0, times, times], [bases, bases, 0], line_width=2, line_color='red')
                 # plot.text(x=times, y=bases, text=legend, text_baseline="middle", text_align="left")
                 plot.add_layout(Label(x=times, y=bases, text=legend, text_color='red'))
-                plot.legend.location = "bottom_right"
+                plot.legend.location = "top_left"
         
         return self.handle_output(plot, plot_type)
 
