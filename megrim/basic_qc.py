@@ -893,7 +893,7 @@ class SequenceSummaryHandler(Flounder):
                       y_axis_label='Number of active channels (n)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
-        plot.step(time_chunks, channel_count, line_width=2, mode="before")
+        plot.step(boundaries[time_chunks], channel_count, line_width=2, mode="before")
         return self.handle_output(plot, plot_type)
 
     def is_barcoded_dataset(self):
