@@ -16,7 +16,12 @@ import re
 from pkg_resources import resource_string, get_distribution, resource_filename
 from IPython.display import Image, display, Markdown 
 from bokeh.plotting import show
+from bokeh.io import export_png
+from bokeh.io.export import get_screenshot_as_png
 import pathlib
+import sys
+import os
+import tempfile
 
 
 class Flounder:
@@ -33,6 +38,7 @@ class Flounder:
     def __init__(self, plot_width=640, plot_height=480, plot_type="native", 
                  plot_tools="save,reset", plot_dpi=96):
         self.location = None
+        self.results_dir = None
         self.plot_width = plot_width
         self.plot_height = plot_height
         self.plot_type = plot_type
@@ -44,6 +50,12 @@ class Flounder:
 
     def get_path(self):
         return self.location
+    
+    def set_results_dir(self, results_dir):
+        self.results_dir = results_dir
+        
+    def get_results_dir(self):
+        return self.results_dir
     
     def set_plot_width(self, plot_width):
         self.plot_width = plot_width
@@ -74,14 +86,41 @@ class Flounder:
     
     def get_plot_dpi(self):
         return self.plot_dpi
+    
+    def get_destination(self):
+        destination_dir = self.get_path()
+        if destination_dir is None:
+            logging.error("Flounder requires a path for writing files to")
+            sys.exit(0)
+        if self.get_results_dir() is not None:
+            destination_dir = os.path.join(destination_dir, self.get_results_dir())
+        logging.info("destination --> %s" % destination_dir)
+        if not os.path.exists(destination_dir):
+            logging.warning("creating DIR==%s" % destination_dir)
+            os.makedirs(destination_dir)
+        return destination_dir
         
-    def handle_output(self, p, plot_type):
+    def handle_output(self, p, plot_type, prefix="bokeh_"):
         if plot_type == 'native':
             return p
         elif plot_type == 'jupyter':
             show(p)
             return None
+        elif plot_type == 'png':
+            logging.info("exporting figure to png")
+            fd, temp_path = tempfile.mkstemp(dir=self.get_destination(), suffix=".png", prefix=prefix)
+            os.close(fd)
+            logging.info("tmppath@%s" % temp_path)
+            export_png(p, filename=temp_path)
+            display(Image(temp_path))
+            return temp_path
+        elif plot_type == 'screenshot':
+            logging.info("exporting figure to screenshot")
+            image = get_screenshot_as_png(p)
+            return image
         else:
+            logging.error("unknown plottype")
+            sys.exit(0)
             return "unknown plottype"
     
     def handle_kwargs(self, fields, **kwargs):

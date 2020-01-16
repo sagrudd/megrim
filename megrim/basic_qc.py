@@ -201,7 +201,7 @@ class SequenceSummaryHandler(Flounder):
         elif len(fastq_id) == 15:
             fastq_id = fastq_id[2]
         else:
-            logging.warning("ERROR - unexpected dimensions ... "+str(fastq_id))
+            logging.warning("ERROR - unable to parse flowcell_id from seq_summary ... "+str(fastq_id))
             fastq_id = "undefined"
         logging.debug("flowcell read as [%s]" % fastq_id)
         # print(("_", fastq_id))
@@ -311,7 +311,7 @@ class SequenceSummaryHandler(Flounder):
         p.axis.visible = False
         p.xgrid.visible = False
         p.ygrid.visible = False
-        return self.handle_output(p, plot_type)
+        return self.handle_output(p, plot_type, prefix="passed_gauge")
 
 
     def plot_channel_activity(self, **kwargs):
