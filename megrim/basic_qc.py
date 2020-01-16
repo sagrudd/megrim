@@ -422,13 +422,19 @@ class SequenceSummaryHandler(Flounder):
 
         if longest_read is None:
             longest_read = geometry.get_longest_read()
+            
+        # the way the bins are created means that we lose the longest read in 
+        # the plots - let's extend the graph a little bit ...
+        longest_read = int(longest_read + 1)
 
         boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
         logging.debug(boundaries)
         indsP = np.digitize(geometry.get_lengths(), boundaries)
         indsF = np.digitize(geometryF.get_lengths(), boundaries)
+        
         countsP = np.unique(indsP, return_counts=True, return_inverse=True)
         countsF = np.unique(indsF, return_counts=True, return_inverse=True)
+
         logging.debug(countsP[1])
 
         def count_bases(x, assignments, reads):
@@ -452,7 +458,13 @@ class SequenceSummaryHandler(Flounder):
         dfP.loc[bins - 1] = np.array([0, 0, 0, 0, 'passed', "#1F78B4", dfP.right[bins - 2],
                                       dfP.right[bins - 2] + (dfP.right[bins - 2] - dfP.left[bins - 2])])
         dfP.loc[countsP[0] - 1, 'count'] = countsP[2]
-        dfP.loc[countsP[0] - 1, 'bases'] = basesP
+        dfP.loc[countsP[0] - 1, 'bases'] = basesP.tolist()
+        
+        # there is an issue with sparse data and missing values ... fix required
+        dfP = dfP.fillna(0)
+        dfP = dfP.astype({'bases_line': 'int32', 'count_line': 'int32', 
+                    'count': 'int32', 'bases': 'int32', 'classification': 'str',
+                    'colour':'str', 'left':'float64', 'right':'float64'})
 
         if include_failed:
             dfF = pd.DataFrame({'bases_line': 0,
@@ -466,8 +478,11 @@ class SequenceSummaryHandler(Flounder):
             dfF.loc[bins - 1] = np.array([0, 0, 0, 0, 'failed', "#A6CEE3", dfF.right[bins - 2],
                                           dfF.right[bins - 2] + (dfF.right[bins - 2] - dfF.left[bins - 2])])
             dfF.loc[countsF[0] - 1, 'count'] = countsF[2]
-            dfF.loc[countsF[0] - 1, 'bases'] = basesF
-
+            dfF.loc[countsF[0] - 1, 'bases'] = basesF.tolist()
+            dfF = dfF.fillna(0)
+            dfF = dfF.astype({'bases_line': 'int32', 'count_line': 'int32', 
+                    'count': 'int32', 'bases': 'int32', 'classification': 'str',
+                    'colour':'str', 'left':'float64', 'right':'float64'})
             # one challenge here is that bokeh quads do not support stacking ...
             # this should be managed by self ...
             dfP['bases_line'] = dfF['bases']
