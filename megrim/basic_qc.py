@@ -201,9 +201,8 @@ class SequenceSummaryHandler(Flounder):
         elif len(fastq_id) == 15:
             fastq_id = fastq_id[2]
         else:
-            print(fastq_id)
-            print("ERROR - unexpected dimensions ...")
-            sys.exit(0)
+            logging.warning("ERROR - unexpected dimensions ... "+str(fastq_id))
+            fastq_id = "undefined"
         logging.debug("flowcell read as [%s]" % fastq_id)
         # print(("_", fastq_id))
         return fastq_id

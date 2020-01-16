@@ -96,7 +96,6 @@ class SessionInfo:
                 module_vnames.append('')
         df = pd.DataFrame(data=pd.Series(module_vnames).values.reshape((-1, cols)))
         index = pd.Index(map(lambda x: "["+str(x)+"]", np.arange(len(module_vnames)+1)[1:].reshape((-1,cols))[:,0].tolist()))
-        print(index)
         return df.set_index(index)
 
     def get_simple_df_str(self, cols=3, prefix="   ", pad=1):
