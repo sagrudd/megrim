@@ -18,6 +18,7 @@ from IPython.display import Image, display, Markdown
 from bokeh.plotting import show
 import pathlib
 
+
 class Flounder:
     """
     FloundeR was the name of the R package that managed tutorial content,
@@ -138,4 +139,8 @@ def tutorial_branding(tutorial=None, legend=None,
         display(Image(resource_string(__name__, 'data/ONT_logo.png')))
         if legend != None:
             display(Markdown("# "+legend))
+
+
+            
+
         

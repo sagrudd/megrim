@@ -4,6 +4,7 @@ import logging
 import re
 import os
 import pandas as pd
+import numpy as np
 import platform
 import locale
 import math
@@ -93,20 +94,17 @@ class SessionInfo:
             add_items = cols - delta
             for i in range(add_items):
                 module_vnames.append('')
-        df = pd.DataFrame(data=pd.Series(module_vnames).values.reshape((-1, cols), order="F"))
-        return df
+        df = pd.DataFrame(data=pd.Series(module_vnames).values.reshape((-1, cols)))
+        index = pd.Index(map(lambda x: "["+str(x)+"]", np.arange(len(module_vnames)+1)[1:].reshape((-1,cols))[:,0].tolist()))
+        print(index)
+        return df.set_index(index)
 
-    def get_simple_df_str(self, cols=4, prefix="   ", pad=3):
+    def get_simple_df_str(self, cols=3, prefix="   ", pad=1):
         df = self.get_simple_df(cols=cols, pad=pad)
         rows = df.to_string().split("\n")[1:]
-        stripc = 0
-        if 0 <= len(df.index) < 10:
-            stripc = 1
-        if 0 <= len(df.index) < 10:
-            stripc = 2
         newrows = []
         for row in rows:
-            newrows.append(prefix+row[stripc:])
+            newrows.append(prefix+row)
         return "attached modules:\n" + "\n".join(newrows)
 
     def get_python_version(self):
@@ -139,5 +137,4 @@ class SessionInfo:
         return self.session_info()
 
 
-print(SessionInfo())
 
