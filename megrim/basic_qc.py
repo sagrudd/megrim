@@ -408,7 +408,7 @@ class SequenceSummaryHandler(Flounder):
         return ip.plot_infographic(plot_width, plot_dpi)
 
 
-    def plot_sequence_length2(self, normalised=True,
+    def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
                              annotate_mean=True, annotate_n50=True, 
                              longest_read=None, **kwargs):
@@ -504,138 +504,6 @@ class SequenceSummaryHandler(Flounder):
         p.grid.grid_line_color = "white"
 
         return self.handle_output(p, plot_type)   
-                
-        
-    def plot_sequence_length(self, normalised=True,
-                             include_failed=True, bins=30,
-                             annotate_mean=True, annotate_n50=True, 
-                             longest_read=None, **kwargs):
-        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
-        
-        # there are some approaches such as np.histogram; seems to split
-        # data into clear bins; but not sure on how for stacked ranges ...
-        # let's use a few more lines of code and perform manually
-
-        geometry = GenomeGeometry(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template']))
-        geometryF = GenomeGeometry(
-            pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template']))
-
-        if longest_read is None:
-            longest_read = geometry.get_longest_read()
-            
-        # the way the bins are created means that we lose the longest read in 
-        # the plots - let's extend the graph a little bit ...
-        longest_read = int(longest_read + 1)
-
-        boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
-        logging.debug(boundaries)
-        indsP = np.digitize(geometry.get_lengths(), boundaries)
-        indsF = np.digitize(geometryF.get_lengths(), boundaries)
-        
-        countsP = np.unique(indsP, return_counts=True, return_inverse=True)
-        countsF = np.unique(indsF, return_counts=True, return_inverse=True)
-
-        logging.debug(countsP[1])
-
-        def count_bases(x, assignments, reads):
-            return reads[assignments == x].sum()
-
-        chunksP = pd.Series(np.unique(countsP[1]))
-        basesP = chunksP.apply(count_bases, assignments=countsP[1], reads=geometry.get_lengths())
-
-        chunksF = pd.Series(np.unique(countsF[1]))
-        basesF = chunksF.apply(count_bases, assignments=countsF[1], reads=geometryF.get_lengths())
-
-        # pad the missing values from these ranges 
-        dfP = pd.DataFrame({'bases_line': 0,
-                            'count_line': 0,
-                            'count': np.repeat(0, bins - 1),
-                            'bases': np.repeat(0, bins - 1),
-                            'classification': 'passed',
-                            'colour': "#1F78B4",
-                            'left': boundaries[:-1],
-                            'right': boundaries[1:]})
-        dfP.loc[bins - 1] = np.array([0, 0, 0, 0, 'passed', "#1F78B4", dfP.right[bins - 2],
-                                      dfP.right[bins - 2] + (dfP.right[bins - 2] - dfP.left[bins - 2])])
-        dfP.loc[countsP[0] - 1, 'count'] = countsP[2]
-        dfP.loc[countsP[0] - 1, 'bases'] = basesP.tolist()
-        
-        # there is an issue with sparse data and missing values ... fix required
-        dfP = dfP.fillna(0)
-        dfP = dfP.astype({'bases_line': 'int32', 'count_line': 'int32', 
-                    'count': 'int32', 'bases': 'int32', 'classification': 'str',
-                    'colour':'str', 'left':'float64', 'right':'float64'})
-
-        if include_failed:
-            dfF = pd.DataFrame({'bases_line': 0,
-                                'count_line': 0,
-                                'count': np.repeat(0, bins - 1),
-                                'bases': np.repeat(0, bins - 1),
-                                'classification': 'failed',
-                                'colour': "#A6CEE3",
-                                'left': boundaries[:-1],
-                                'right': boundaries[1:]})
-            dfF.loc[bins - 1] = np.array([0, 0, 0, 0, 'failed', "#A6CEE3", dfF.right[bins - 2],
-                                          dfF.right[bins - 2] + (dfF.right[bins - 2] - dfF.left[bins - 2])])
-            dfF.loc[countsF[0] - 1, 'count'] = countsF[2]
-            dfF.loc[countsF[0] - 1, 'bases'] = basesF.tolist()
-            dfF = dfF.fillna(0)
-            dfF = dfF.astype({'bases_line': 'int32', 'count_line': 'int32', 
-                    'count': 'int32', 'bases': 'int32', 'classification': 'str',
-                    'colour':'str', 'left':'float64', 'right':'float64'})
-            # one challenge here is that bokeh quads do not support stacking ...
-            # this should be managed by self ...
-            dfP['bases_line'] = dfF['bases']
-            dfP['bases'] = dfP['bases_line'] + dfP['bases']
-            dfP['count_line'] = dfF['count']
-            dfP['count'] = dfP['count_line'] + dfP['count']
-            dfP = dfP.append(dfF)
-
-        logging.debug(dfP)
-
-        plot_base = 'bases_line'
-        plot_key = 'bases'
-        plot_legend = "count (bases)"
-        if not normalised:
-            logging.info("using counts instead of bases!")
-            plot_base = 'count_line'
-            plot_key = 'count'
-            plot_legend = "count (reads)"
-
-        p = figure(title="Histogram showing read-length distribution", 
-                   background_fill_color="lightgrey", plot_width=plot_width, 
-                   plot_height=plot_height, tools=plot_tools,
-                   x_range=Range1d(0, longest_read))
-        p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
-               fill_color='colour', line_color="white", legend_field='classification')
-
-        if annotate_mean:
-            vline = Span(location=geometry.get_mean_length(), dimension='height', line_color='red', line_width=2)
-            p.renderers.extend([vline])
-            p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
-                                  source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()],
-                                                                    y=[dfP[plot_key].max()],
-                                                                    text=['Mean'])),
-                                  render_mode='canvas', text_align='right', text_color="red"))
-
-        if annotate_n50:
-            vline = Span(location=geometry.get_n_value(), dimension='height', line_color='orange', line_width=2)
-            p.renderers.extend([vline])
-            p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
-                                  source=ColumnDataSource(data=dict(x=[geometry.get_n_value()],
-                                                                    y=[dfP[plot_key].max()],
-                                                                    text=['N50'])),
-                                  render_mode='canvas', text_align='left', text_color="orange"))
-        p.y_range.start = 0
-        p.legend.location = "center_right"
-        p.xaxis.axis_label = 'Sequence length (nt)'
-        p.yaxis.axis_label = plot_legend
-        p.yaxis.formatter = NumeralTickFormatter(format="0,0")
-        p.xaxis.formatter = NumeralTickFormatter(format="0,0")
-        p.grid.grid_line_color = "white"
-
-        return self.handle_output(p, plot_type)
     
 
     def plot_q_distribution(self, bins=30, **kwargs):
