@@ -763,6 +763,34 @@ class SequenceSummaryHandler(Flounder):
 
         return self.handle_output(plot, plot_type)
 
+
+    @functools.lru_cache()
+    def extract_temporal_data(self, interval_mins):
+        boundaries = np.linspace(0, self.get_runtime(units='hours'),
+                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
+                                 endpoint=True, retstep=False)
+        assignments = np.digitize(self.seq_sum['start_time'] / 60 / 60, boundaries)
+
+        t_seq_sum = self.seq_sum[["sequence_length_template", "passes_filtering"]]
+        
+        t_seq_sum =  t_seq_sum.reindex(columns=t_seq_sum.columns.tolist() + 
+                                       ["batch", "counter", "pass_bases",
+                                        "fail_bases", "pass_reads", "fail_reads"])     
+        t_seq_sum.iloc[:,[2]] = assignments
+        t_seq_sum.iloc[:,[3]]=1
+        t_seq_sum.iloc[:,[4,5,6,7]]=0
+        t_seq_sum.loc[~t_seq_sum.passes_filtering, ["fail_reads"]] = 1
+        t_seq_sum.loc[t_seq_sum.passes_filtering, ["pass_reads"]] = 1
+        t_seq_sum.loc[t_seq_sum.passes_filtering, ["pass_bases"]] = t_seq_sum.loc[t_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
+        t_seq_sum.loc[~t_seq_sum.passes_filtering, ["fail_bases"]] = t_seq_sum.loc[~t_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
+        
+        t_seq_res = t_seq_sum.groupby(["batch"]).agg(
+            {"batch": "first", "sequence_length_template": np.sum, 
+             "counter": np.sum, "fail_reads": np.sum, "pass_reads": np.sum,
+             "pass_bases": np.sum, "fail_bases": np.sum })
+        return (boundaries, t_seq_res)
+        
+
     def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", 
                              cumulative=True, milestones=[0.5, 0.9], 
                              include_total=False, include_failed=True,
@@ -778,71 +806,49 @@ class SequenceSummaryHandler(Flounder):
         elif scale == "Kilobases":
             scaleVal = 1e3
 
-        boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
-                                 endpoint=True, retstep=False)
-        assignments = np.digitize(self.seq_sum['start_time'] / 60 / 60, boundaries)
-        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'] / 60 / 60,
-                                       boundaries)
-        fail_assignments = np.digitize(
-            self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'] / 60 / 60, boundaries)
-
-        bases_by_time = np.array([self.seq_sum['sequence_length_template'][assignments == i].sum() for i in
-                                  range(1, len(boundaries))])
-        passed_bases_by_time = np.array([self.seq_sum[self.seq_sum['passes_filtering']][
-                                             'sequence_length_template'][pass_assignments == i].sum() for i in
-                                         range(1, len(boundaries))])
-        failed_bases_by_time = np.array([self.seq_sum[~self.seq_sum['passes_filtering']][
-                                             'sequence_length_template'][fail_assignments == i].sum() for i in
-                                         range(1, len(boundaries))])
-
-        bases_by_time = bases_by_time / scaleVal
-        passed_bases_by_time = passed_bases_by_time / scaleVal
-        failed_bases_by_time = failed_bases_by_time / scaleVal
-
-        if cumulative:
-            bases_by_time = np.cumsum(bases_by_time)
-            passed_bases_by_time = np.cumsum(passed_bases_by_time)
-            failed_bases_by_time = np.cumsum(failed_bases_by_time)
-
+        (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
+        t_seq_res = temporal_seq_res.copy(deep=True)
+        # this deep data copy is required because we are scaling the data
+        # and this messes with the core cached object ...
+        t_seq_res.iloc[:,[1,5,6]] = t_seq_res.iloc[:,[1,5,6]] / scaleVal
+        
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
-                      y_axis_label='Sequence %s (n)' % (scale), background_fill_color="lightgrey",
+                      y_axis_label='Sequence {} (n)'.format(scale), background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
-
-        if include_total:
-            plot.line(boundaries[:-1], bases_by_time, line_width=2, line_color='black', 
-                      legend_label='bases across all reads')
-        plot.line(boundaries[:-1], passed_bases_by_time, line_width=2, line_color='#1F78B4',
-                  legend_label='bases from passed reads')
-        if include_failed:
-            plot.line(boundaries[:-1], failed_bases_by_time, line_width=2, line_color='#A6CEE3', 
-                      legend_label='bases from failed reads')
-
         if cumulative:
+            if include_total:
+                plot.line(boundaries[:-1], np.cumsum(t_seq_res.sequence_length_template), line_width=2, line_color='black', 
+                          legend_label='bases across all reads')
+            plot.line(boundaries[:-1], np.cumsum(t_seq_res.pass_bases), line_width=2, line_color='#1F78B4',
+                  legend_label='bases from passed reads')
+            if include_failed:
+                plot.line(boundaries[:-1], np.cumsum(t_seq_res.fail_bases), line_width=2, line_color='#A6CEE3', 
+                          legend_label='bases from failed reads')
             for milestone in milestones:
-                cdata = self.get_sequence_base_point(fraction=milestone, interval_mins=interval_mins)
-                times = cdata[1]
-                bases = cdata[0] / scaleVal
+                (bases, times) = self.get_sequence_base_point(fraction=milestone, interval_mins=interval_mins)
+                bases = bases / scaleVal
                 legend = "T{:.0f}".format(milestone * 100)
                 plot.line([0, times, times], [bases, bases, 0], line_width=2, line_color='red')
-                # plot.text(x=times, y=bases, text=legend, text_baseline="middle", text_align="left")
                 plot.add_layout(Label(x=times, y=bases, text=legend, text_color='red'))
-                plot.legend.location = "top_left"
-        
+            plot.legend.location = "top_left"
+        else:
+            if include_total:
+                plot.line(boundaries[:-1], t_seq_res.sequence_length_template, line_width=2, line_color='black', 
+                          legend_label='bases across all reads')
+            plot.line(boundaries[:-1], t_seq_res.pass_bases, line_width=2, line_color='#1F78B4',
+                  legend_label='bases from passed reads')
+            if include_failed:
+                plot.line(boundaries[:-1], t_seq_res.fail_bases, line_width=2, line_color='#A6CEE3', 
+                          legend_label='bases from failed reads')
         return self.handle_output(plot, plot_type)
 
-    def get_sequence_base_point(self, fraction=0.5, interval_mins=5):
-        # using numpy interpolate to calculate intersect ...
-        boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
-                                 endpoint=True, retstep=False)
-        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'] / 60 / 60,
-                                       boundaries)
-        passed_bases_by_time = np.array([self.seq_sum[self.seq_sum['passes_filtering']][
-                                             'sequence_length_template'][pass_assignments == i].sum() for i in
-                                         range(1, len(boundaries))])
-        target_value = passed_bases_by_time.sum() * fraction
-        return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
+
+    def get_sequence_base_point(self, fraction=0.5, interval_mins=5, column="pass_bases"):
+        (boundaries, t_seq_res) = self.extract_temporal_data(interval_mins)
+        target_value = t_seq_res[column].sum() * fraction
+        return (target_value, np.interp(target_value, np.cumsum(t_seq_res[column]), boundaries[:-1]))
+
+
 
     def plot_translocation_speed(self, interval_mins=60, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
