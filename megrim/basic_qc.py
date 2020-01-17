@@ -929,9 +929,31 @@ class SequenceSummaryHandler(Flounder):
     def merge_barcode_summary(self, barcode_summary_file):
         i = 1
 
-    def plot_barcode_info(self):
-        i = 1
-        return "ThisIsAFilename.png"
+    def plot_barcode_info(self, **kwargs):
+        if not self.is_barcoded_dataset():
+             return None
+        (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
+
+        barcodes = self.tabulate_barcodes()
+        bi = pd.Series(barcodes.index)
+
+        classified = barcodes.iloc[bi[bi != "unclassified"].index.values]
+        unclassified = barcodes.iloc[bi[bi == "unclassified"].index.values]
+
+        bc_fraction = InfographicNode(legend="Reads with barcode",
+                                        value="{:.2f} %".format(classified['count'].sum() / (classified['count'].sum() + unclassified['count'].sum()) * 100),
+                                        graphic='chart-pie')
+
+        bc_bc_count = InfographicNode(legend="Barcoded libraries",
+                                         value="{}".format(len(classified.index)),
+                                         graphic='barcode')
+
+        bc_variance = InfographicNode(legend="Barcode variance",
+                                     value=">{}\n{}<".format(classified["count"].min(),classified["count"].max()),
+                                     graphic='sort-numeric-down')
+        infographic_data = [bc_fraction, bc_bc_count, bc_variance]
+        ip = InfographicPlot(infographic_data, rows=1, columns=3)
+        return ip.plot_infographic(plot_width, plot_dpi)
 
     @functools.lru_cache()
     def tabulate_barcodes(self, threshold=0.01):
@@ -998,7 +1020,7 @@ class SequenceSummaryHandler(Flounder):
         p.xaxis.axis_label = 'Barcode assignment'
         p.yaxis.axis_label = "Number of Reads"
         p.yaxis.formatter = NumeralTickFormatter(format="0,0")
-        p.xaxis.major_label_orientation = "vertical"
+        p.xaxis.major_label_orientation = math.pi/2
         p.grid.grid_line_color = "white"
         
         return self.handle_output(p, plot_type)
