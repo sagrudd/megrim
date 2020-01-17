@@ -29,6 +29,7 @@ from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelS
 from bokeh.palettes import (Blues9)
 from bokeh.plotting import figure
 import warnings
+import functools
 
 # import palettable.colorbrewer.sequential
 
@@ -932,6 +933,7 @@ class SequenceSummaryHandler(Flounder):
         i = 1
         return "ThisIsAFilename.png"
 
+    @functools.lru_cache()
     def tabulate_barcodes(self, threshold=0.01):
          if not self.is_barcoded_dataset():
              return None
@@ -976,9 +978,30 @@ class SequenceSummaryHandler(Flounder):
 
          
 
-    def plot_barcodes(self, threshold=0.01):
-        data = self.tabulate_barcodes(threshold=threshold)
-        return "ThisIsAFilename.png"
+    def plot_barcodes(self, **kwargs):
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        
+        if not self.is_barcoded_dataset():
+            return None
+        barcodes = self.tabulate_barcodes()
+         
+        p = figure(title="Histogram showing abundance of different barcodes", 
+                   background_fill_color="lightgrey", plot_width=plot_width,
+                   plot_height=plot_height, tools=plot_tools,
+                   x_range=barcodes.index.tolist())
+
+        p.vbar(barcodes.index.tolist(), top=barcodes["count"].tolist(),
+               width=0.75, fill_alpha=0.7, fill_color="#1F78B4")
+
+        p.y_range.start = 0
+        p.legend.location = "center_right"
+        p.xaxis.axis_label = 'Barcode assignment'
+        p.yaxis.axis_label = "Number of Reads"
+        p.yaxis.formatter = NumeralTickFormatter(format="0,0")
+        p.xaxis.major_label_orientation = "vertical"
+        p.grid.grid_line_color = "white"
+        
+        return self.handle_output(p, plot_type)
 
 
 nul = """
