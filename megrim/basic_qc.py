@@ -440,7 +440,7 @@ class SequenceSummaryHandler(Flounder):
         l_seq_res.iloc[:,[6]] = boundaries[1:]
 
         if include_failed:
-            if normalised:
+            if not normalised:
                 failed = pd.DataFrame({"reads":l_seq_res["fail_reads"].tolist(), "reads_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
                 passed = pd.DataFrame({"reads":(l_seq_res["pass_reads"] + l_seq_res["fail_reads"]).tolist(), "reads_line": l_seq_res["fail_reads"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
             else:
@@ -448,7 +448,7 @@ class SequenceSummaryHandler(Flounder):
                 passed = pd.DataFrame({"bases":(l_seq_res["pass_bases"] + l_seq_res["fail_bases"]).tolist(), "bases_line": l_seq_res["fail_bases"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
             passed = passed.append(failed, sort=False)
         else:
-            if normalised:
+            if not normalised:
                 passed = pd.DataFrame({"reads":l_seq_res["pass_reads"].tolist(), "reads_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
             else:
                 passed = pd.DataFrame({"bases":l_seq_res["pass_bases"].tolist(), "bases_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
@@ -456,7 +456,7 @@ class SequenceSummaryHandler(Flounder):
         plot_base = 'bases_line'
         plot_key = 'bases'
         plot_legend = "count (bases)"
-        if normalised:
+        if not normalised:
             logging.info("using read counts instead of bases!")
             plot_base = 'reads_line'
             plot_key = 'reads'
