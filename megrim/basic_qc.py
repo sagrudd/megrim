@@ -14,6 +14,7 @@ import sys
 import os
 import atexit
 import matplotlib as mpl
+from tqdm import tqdm
 from scipy import stats
 from megrim.genome_geometry import GenomeGeometry
 from megrim.environment import Flounder
@@ -161,7 +162,7 @@ class SequenceSummaryHandler(Flounder):
         # start excluding dask columns that are not of core interest
         keep = ['channel', 'start_time', 'duration', 'num_events',
                 'sequence_length_template', 'mean_qscore_template',
-                'passes_filtering',
+                'passes_filtering', 'barcode_arrangement',
                 ]
         for col in self.seq_sum.columns:
             if not col in keep:
@@ -922,7 +923,7 @@ class SequenceSummaryHandler(Flounder):
             DESCRIPTION.
 
         """
-        return False
+        return "barcode_arrangement" in self.seq_sum.columns
 
     def merge_barcode_summary(self, barcode_summary_file):
         i = 1
@@ -932,7 +933,31 @@ class SequenceSummaryHandler(Flounder):
         return "ThisIsAFilename.png"
 
     def tabulate_barcodes(self, threshold=0.01):
-        i = 1
+         if not self.is_barcoded_dataset():
+             return None
+         passed = self.seq_sum[self.seq_sum["passes_filtering"]]
+         barcode_content = np.unique(
+             passed["barcode_arrangement"].compute(), 
+             return_counts=True, return_inverse=True)
+         
+         barcode_df = pd.DataFrame({"barcode":barcode_content[0], "count": barcode_content[2]})
+         
+         def barcode_hunt(x):
+             key = barcode_content[0][x]
+             #print("x == %s == %s" % (x, key))
+             passed_bc = passed[passed.barcode_arrangement == key]
+             seql = passed_bc.sequence_length_template.compute()
+             seqq = passed_bc.mean_qscore_template.compute()
+             geometry = GenomeGeometry(seql)
+             return (len(seql) / passed.compute().shape[0]*100, 
+                     geometry.calculate_mean_quality(seqq),
+                     seql.sum()/1e6, seql.min(), seql.max(), seql.mean(), geometry.get_n_value())
+         
+         bc_data = pd.Series(np.arange(barcode_df.shape[0])).apply(barcode_hunt)
+         return pd.concat([barcode_df, pd.DataFrame(bc_data.tolist(), columns=["%", "mean_q", "Mbases", "min", "max", "mean", "N50"])], axis=1)
+
+
+         
 
     def plot_barcodes(self, threshold=0.01):
         data = self.tabulate_barcodes(threshold=threshold)
@@ -1095,3 +1120,60 @@ class SequencingSummaryGetChannelMap:
         channel_counts = self.seq_sum.groupby('channel')['channel'].agg(['count']).compute()
         # merge the count data with the map coordinates
         return pd.merge(platform_map, channel_counts, on='channel', how='left')
+    
+    
+class FixSequencingSummary:
+    
+    def __init__(self, fin):
+        self.fin = fin
+        
+    def parse(self):
+        lines = 0
+        fh = open(self.fin, 'r')
+        while 1:
+            line = fh.readline()
+            if not line:
+                break
+            line = line.strip()
+            fields = len(line.split("\t"))
+            print(fields)
+            lines += 1
+            if lines > 10: 
+                fh.close()
+                return fields
+                
+    def parse_fields(self, count):
+        fh = open(self.fin, 'r')
+        print("filesize ?? %s" % os.fstat(fh.fileno()).st_size)
+
+        while 1:
+       
+            line = fh.readline()
+            if not line:
+                break
+            line = line.strip()
+            fields = len(line.split("\t"))
+            if fields != count:
+                print("%s fields at %s" % (fields, fh.tell()))
+ 
+        fh.close()
+                
+    def fixit(self, count):
+        fh = open(self.fin, 'r')
+        fw = open(self.fin+".fixed", 'w')
+        with tqdm(ascii=True, total=os.fstat(fh.fileno()).st_size) as pbar:
+            while 1:
+                pbar.update(fh.tell())
+                line = fh.readline()
+                if not line:
+                    break
+                line = line.strip()
+                fields = len(line.split("\t"))
+                if fields == count:
+                    fw.write(line+"\n")
+        pbar.close()
+        fw.close()
+                
+        
+                
+                

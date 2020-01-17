@@ -107,7 +107,7 @@ class Flounder:
             show(p)
             return None
         elif plot_type == 'png':
-            logging.info("exporting figure to png")
+            logging.debug("exporting figure to png")
             fd, temp_path = tempfile.mkstemp(dir=self.get_destination(), suffix=".png", prefix=prefix)
             os.close(fd)
             logging.info("tmppath@%s" % temp_path)
@@ -115,7 +115,7 @@ class Flounder:
             display(Image(temp_path))
             return temp_path
         elif plot_type == 'screenshot':
-            logging.info("exporting figure to screenshot")
+            logging.debug("exporting figure to screenshot")
             image = get_screenshot_as_png(p)
             return image
         else:
