@@ -53,14 +53,15 @@ class Timer():
 
 class SequenceSummaryHandler(Flounder):
 
-    def __init__(self, target_file=None, target_data=None):
+    def __init__(self, target_file=None, target_data=None, fcid=None):
         Flounder.__init__(self)
         self.target_file = target_file
+        self.fcid = fcid
         if target_file is not None:
             self._import_data()
         elif target_data is not None:
-           logging.error("method not defined")
-           sys.exit(0)
+           self.seq_sum = target_data
+           self.seq_sum_head = target_data.head()
 
 
     def _load_seqsum(self, file=None):
@@ -190,8 +191,11 @@ class SequenceSummaryHandler(Flounder):
         elif "filename" in columns:
             target = "filename"
         else:
-            print("ERROR - there is not a suitable filename column")
-            sys.exit(0)
+            logging.warning("there is not a suitable filename column")
+            if self.fcid is not None:
+                return self.fcid
+            else:
+                return "undefined"
 
         fastq_id = str(self.seq_sum_head[target].iloc[0]).split("_")
         if len(fastq_id) == 3:
@@ -1031,7 +1035,9 @@ class SequenceSummaryHandler(Flounder):
             return None
         
         subset = self.seq_sum[self.seq_sum["barcode_arrangement"]==barcode_id]
-        return subset
+        sub_ssh = SequenceSummaryHandler(target_data=subset, fcid="{}\n{}".format(self.get_flowcell_id(), barcode_id))
+        self.sync(sub_ssh)
+        return sub_ssh
 
 
 

@@ -45,6 +45,15 @@ class Flounder:
         self.plot_tools = plot_tools
         self.plot_dpi = plot_dpi
 
+    def sync(self, new_me):
+        new_me.set_path(self.get_path())
+        new_me.set_results_dir(self.get_results_dir())
+        new_me.set_plot_width(self.get_plot_width())
+        new_me.set_plot_height(self.get_plot_height())
+        new_me.set_plot_type(self.get_plot_type())
+        new_me.set_plot_tools(self.get_plot_tools())
+        new_me.set_plot_dpi(self.get_plot_dpi())
+        
     def set_path(self, path):
         self.location = path
 
