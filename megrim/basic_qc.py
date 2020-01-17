@@ -28,7 +28,7 @@ from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelS
     ColumnDataSource, Range1d
 from bokeh.palettes import (Blues9)
 from bokeh.plotting import figure
-
+import warnings
 
 # import palettable.colorbrewer.sequential
 
@@ -940,7 +940,8 @@ class SequenceSummaryHandler(Flounder):
              passed["barcode_arrangement"].compute(), 
              return_counts=True, return_inverse=True)
          
-         barcode_df = pd.DataFrame({"barcode":barcode_content[0], "count": barcode_content[2]})
+         barcode_df = pd.DataFrame({"barcode":barcode_content[0], 
+                                    "count": barcode_content[2]}).set_index("barcode")
          
          def barcode_hunt(x):
              key = barcode_content[0][x]
@@ -953,9 +954,25 @@ class SequenceSummaryHandler(Flounder):
                      geometry.calculate_mean_quality(seqq),
                      seql.sum()/1e6, seql.min(), seql.max(), seql.mean(), geometry.get_n_value())
          
-         bc_data = pd.Series(np.arange(barcode_df.shape[0])).apply(barcode_hunt)
-         return pd.concat([barcode_df, pd.DataFrame(bc_data.tolist(), columns=["%", "mean_q", "Mbases", "min", "max", "mean", "N50"])], axis=1)
-
+            
+         # *very* bad behaviour - there is a continuous fight between pandas
+         # abnd tqdm ... this leads to a silly deprecation warning message 
+         # with load of tqdm.pandas --- masking it to encourage less user
+         # concern on this issue - actively watching
+         warnings.simplefilter("ignore")   
+         tqdm.pandas()
+         
+         bc_data = pd.Series(np.arange(barcode_df.shape[0])).progress_map(barcode_hunt)  
+         
+         bc_data = pd.concat([barcode_df, 
+                              pd.DataFrame(bc_data.tolist(), 
+                                           index=barcode_content[0], 
+                                           columns=["%", "mean_q", "Mbases", "min", "max", "mean", "N50"])], axis=1)
+         bc_data["mean_q"] = bc_data["mean_q"].round(2)
+         bc_data["Mbases"] = bc_data["Mbases"].round(2)
+         bc_data["mean"] = bc_data["mean"].round(2)
+         bc_data["%"] = bc_data["%"].round(2)
+         return bc_data
 
          
 
