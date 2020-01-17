@@ -407,6 +407,105 @@ class SequenceSummaryHandler(Flounder):
         ip = InfographicPlot(infographic_data, rows=1, columns=5)
         return ip.plot_infographic(plot_width, plot_dpi)
 
+
+    def plot_sequence_length2(self, normalised=True,
+                             include_failed=True, bins=30,
+                             annotate_mean=True, annotate_n50=True, 
+                             longest_read=None, **kwargs):
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        
+        l_seq_sum = self.seq_sum[["sequence_length_template", "passes_filtering"]]
+        
+        if longest_read is None:
+            longest_read = l_seq_sum.sequence_length_template.max()
+        longest_read = int(longest_read + 1)
+        boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
+        assignments = np.digitize(l_seq_sum.sequence_length_template, boundaries)
+        
+        l_seq_sum = l_seq_sum.reindex(columns=l_seq_sum.columns.tolist()+["batch", "pass_bases", "fail_bases", "pass_reads", "fail_reads"])
+        l_seq_sum.iloc[:,[2]] = assignments
+        l_seq_sum.iloc[:,[3,4,5,6]] = 0
+        l_seq_sum.loc[~l_seq_sum.passes_filtering, ["fail_reads"]] = 1
+        l_seq_sum.loc[l_seq_sum.passes_filtering, ["pass_reads"]] = 1
+        l_seq_sum.loc[l_seq_sum.passes_filtering, ["pass_bases"]] = l_seq_sum.loc[l_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
+        l_seq_sum.loc[~l_seq_sum.passes_filtering, ["fail_bases"]] = l_seq_sum.loc[~l_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
+        
+        l_seq_res = l_seq_sum.groupby(["batch"]).agg(
+            {"batch": "first",  "fail_reads": np.sum, "pass_reads": np.sum,
+             "pass_bases": np.sum, "fail_bases": np.sum })
+    
+        # shape the data for quad presentation ...
+        l_seq_res = l_seq_res.reindex(columns=l_seq_res.columns.tolist()+["left", "right"])
+        l_seq_res.iloc[:,[5]] = boundaries[:-1]
+        l_seq_res.iloc[:,[6]] = boundaries[1:]
+
+        if include_failed:
+            if normalised:
+                failed = pd.DataFrame({"reads":l_seq_res["fail_reads"].tolist(), "reads_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+                passed = pd.DataFrame({"reads":(l_seq_res["pass_reads"] + l_seq_res["fail_reads"]).tolist(), "reads_line": l_seq_res["fail_reads"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+            else:
+                failed = pd.DataFrame({"bases":l_seq_res["pass_bases"].tolist(), "reads_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+                passed = pd.DataFrame({"bases":(l_seq_res["pass_bases"] + l_seq_res["fail_bases"]).tolist(), "bases_line": l_seq_res["fail_bases"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+            passed = passed.append(failed, sort=False)
+        else:
+            if normalised:
+                passed = pd.DataFrame({"reads":l_seq_res["pass_reads"].tolist(), "reads_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+            else:
+                passed = pd.DataFrame({"bases":l_seq_res["pass_bases"].tolist(), "bases_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+           
+        plot_base = 'bases_line'
+        plot_key = 'bases'
+        plot_legend = "count (bases)"
+        if normalised:
+            logging.info("using read counts instead of bases!")
+            plot_base = 'reads_line'
+            plot_key = 'reads'
+            plot_legend = "count (reads)"
+
+        p = figure(title="Histogram showing read-length distribution", 
+                   background_fill_color="lightgrey", plot_width=plot_width, 
+                   plot_height=plot_height, tools=plot_tools,
+                   x_range=Range1d(0, longest_read))
+        p.quad(source=passed, top=plot_key, bottom=plot_base, left='left', right='right',
+               fill_color='colour', line_color="white", legend_field='classification')
+  
+        if annotate_mean:
+            vline = Span(location=l_seq_sum.sequence_length_template.mean(), dimension='height', line_color='red', line_width=2)
+            p.renderers.extend([vline])
+            p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
+                                  source=ColumnDataSource(data=dict(x=[l_seq_sum.sequence_length_template.mean()],
+                                                                    y=[passed[plot_key].max()],
+                                                                    text=['Mean'])),
+                                  render_mode='canvas', text_align='right', text_color="red"))
+
+
+        if annotate_n50:
+            ldata = l_seq_sum.sequence_length_template.sort_values(ascending=False).reset_index(drop=True)
+            n_sum = int(ldata.sum())
+            n_targ = n_sum * (50 / 100)
+            accumulated = ldata.cumsum()
+            aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
+            N = ldata[aindex]
+            vline = Span(location=N, dimension='height', line_color='orange', line_width=2)
+            p.renderers.extend([vline])
+            p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
+                                  source=ColumnDataSource(data=dict(x=[N],
+                                                                    y=[passed[plot_key].max()],
+                                                                    text=['N50'])),
+                                  render_mode='canvas', text_align='left', text_color="orange"))
+
+    
+        p.y_range.start = 0
+        p.legend.location = "center_right"
+        p.xaxis.axis_label = 'Sequence length (nt)'
+        p.yaxis.axis_label = plot_legend
+        p.yaxis.formatter = NumeralTickFormatter(format="0,0")
+        p.xaxis.formatter = NumeralTickFormatter(format="0,0")
+        p.grid.grid_line_color = "white"
+
+        return self.handle_output(p, plot_type)   
+                
+        
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
                              annotate_mean=True, annotate_n50=True, 
