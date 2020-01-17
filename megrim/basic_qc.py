@@ -12,7 +12,6 @@ import numpy as np
 import math
 import sys
 import os
-import atexit
 import matplotlib as mpl
 from tqdm import tqdm
 from scipy import stats
@@ -54,18 +53,15 @@ class Timer():
 
 class SequenceSummaryHandler(Flounder):
 
-    def __init__(self, target_file):
+    def __init__(self, target_file=None, target_data=None):
         Flounder.__init__(self)
         self.target_file = target_file
-        self.temp_files = []
-        atexit.register(self.cleanup)
-        self._import_data()
+        if target_file is not None:
+            self._import_data()
+        elif target_data is not None:
+           logging.error("method not defined")
+           sys.exit(0)
 
-    def cleanup(self):
-        print("SequenceSummaryHandler exit called")
-        for tfile in self.temp_files:
-            print("unlinking ", tfile)
-            os.remove(tfile)
 
     def _load_seqsum(self, file=None):
         if file is None:
@@ -172,7 +168,7 @@ class SequenceSummaryHandler(Flounder):
         pbar = ProgressBar()
         pbar.register()
         with Timer("Elapsed time to extract sequence data {}"):
-            self.seq_sum = self.seq_sum.persist()
+            self.seq_sum = self.seq_sum.compute()
         pbar.unregister()
 
     def get_flowcell_id(self):
@@ -209,6 +205,7 @@ class SequenceSummaryHandler(Flounder):
         # print(("_", fastq_id))
         return fastq_id
 
+
     def executive_summary(self, **kwargs):
         """
         Method prepares a three panel infographic plot that summarises the
@@ -222,9 +219,8 @@ class SequenceSummaryHandler(Flounder):
         """
         (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
         read_count = len(self.seq_sum)
-        total_bases = self.seq_sum['sequence_length_template'].sum().compute()
-        # passed_bases = self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].sum().compute()
-
+        total_bases = self.seq_sum['sequence_length_template'].sum()
+        
         flowcell_node = InfographicNode(legend="flowcell",
                                         value=self.get_flowcell_id(),
                                         graphic='fingerprint')
@@ -241,7 +237,7 @@ class SequenceSummaryHandler(Flounder):
         return ip.plot_infographic(plot_width, plot_dpi)
 
     def get_absolute_runtime(self):
-        max_time = self.seq_sum['start_time'].max().compute()
+        max_time = self.seq_sum['start_time'].max()
         return max_time
 
     def get_runtime(self, units="hours", rounded=True):
@@ -287,7 +283,7 @@ class SequenceSummaryHandler(Flounder):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         read_count = len(self.seq_sum)
-        passed_read_count = self.seq_sum.passes_filtering.sum().compute()
+        passed_read_count = self.seq_sum.passes_filtering.sum()
         perc_val = passed_read_count / read_count * 100
 
         p = figure(plot_width=plot_width, plot_height=plot_height, x_range=(0.25, 1.75), y_range=(0.7, 1.5), tools=plot_tools)
@@ -368,7 +364,7 @@ class SequenceSummaryHandler(Flounder):
         (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
         
         geometry = GenomeGeometry(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template']))
         longest_read = geometry.get_longest_read()
         logging.debug("longest_read == %s" % (longest_read))
         mean_read_length = geometry.get_mean_length()
@@ -376,10 +372,10 @@ class SequenceSummaryHandler(Flounder):
         read_n50_length = geometry.get_n_value(n=50)
         logging.debug("read_n50_length == %s" % (read_n50_length))
         passed_mean_q = geometry.calculate_mean_quality(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute()))
+            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template']))
         logging.debug("passed_mean_q == %s" % (passed_mean_q))
         failed_mean_q = geometry.calculate_mean_quality(
-            pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template'].compute()))
+            pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template']))
         logging.debug("failed_mean_q == %s" % (failed_mean_q))
 
         # df$info <- c(passedMeanLength, N50, passedMeanQ, failedMeanQ, prettyNum(max(passedSeqs$sequence_length_template), big.mark=","))
@@ -418,9 +414,9 @@ class SequenceSummaryHandler(Flounder):
         # let's use a few more lines of code and perform manually
 
         geometry = GenomeGeometry(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template']))
         geometryF = GenomeGeometry(
-            pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+            pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['sequence_length_template']))
 
         if longest_read is None:
             longest_read = geometry.get_longest_read()
@@ -542,10 +538,10 @@ class SequenceSummaryHandler(Flounder):
     def plot_q_distribution(self, bins=30, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
-        q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
+        q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'] )
         q_pass = q_pass.sort_values(ascending=False).reset_index(drop=True)
 
-        q_fail = pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template'].compute())
+        q_fail = pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template'] )
         q_fail = q_fail.sort_values(ascending=False).reset_index(drop=True)
 
         boundaries = np.linspace(q_fail.min(), q_pass.max(), num=bins, endpoint=True, retstep=False)
@@ -627,13 +623,13 @@ class SequenceSummaryHandler(Flounder):
         logging.debug(l_boundaries)
 
         geometry = GenomeGeometry(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template'].compute()))
+            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template']))
 
         # are there NaN in the dataset? There shouldn't be ...
 
         binned2d = stats.binned_statistic_2d(
-            self.seq_sum['sequence_length_template'].compute(),
-            self.seq_sum['mean_qscore_template'].compute(),
+            self.seq_sum['sequence_length_template'],
+            self.seq_sum['mean_qscore_template'],
             np.repeat(1, len(self.seq_sum)), 'count',
             bins=[l_boundaries, q_boundaries]
         )
@@ -723,11 +719,11 @@ class SequenceSummaryHandler(Flounder):
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
-        assignments = np.digitize(self.seq_sum['start_time'].compute() / 60 / 60, boundaries)
-        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60,
+        assignments = np.digitize(self.seq_sum['start_time'] / 60 / 60, boundaries)
+        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'] / 60 / 60,
                                        boundaries)
         fail_assignments = np.digitize(
-            self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+            self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'] / 60 / 60, boundaries)
         time_counts = np.unique(assignments, return_counts=True, return_inverse=True)
         pass_time_counts = np.unique(pass_assignments, return_counts=True, return_inverse=True)
         fail_time_counts = np.unique(fail_assignments, return_counts=True, return_inverse=True)
@@ -781,19 +777,19 @@ class SequenceSummaryHandler(Flounder):
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
-        assignments = np.digitize(self.seq_sum['start_time'].compute() / 60 / 60, boundaries)
-        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60,
+        assignments = np.digitize(self.seq_sum['start_time'] / 60 / 60, boundaries)
+        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'] / 60 / 60,
                                        boundaries)
         fail_assignments = np.digitize(
-            self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60, boundaries)
+            self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'] / 60 / 60, boundaries)
 
-        bases_by_time = np.array([self.seq_sum['sequence_length_template'].compute()[assignments == i].sum() for i in
+        bases_by_time = np.array([self.seq_sum['sequence_length_template'][assignments == i].sum() for i in
                                   range(1, len(boundaries))])
         passed_bases_by_time = np.array([self.seq_sum[self.seq_sum['passes_filtering']][
-                                             'sequence_length_template'].compute()[pass_assignments == i].sum() for i in
+                                             'sequence_length_template'][pass_assignments == i].sum() for i in
                                          range(1, len(boundaries))])
         failed_bases_by_time = np.array([self.seq_sum[~self.seq_sum['passes_filtering']][
-                                             'sequence_length_template'].compute()[fail_assignments == i].sum() for i in
+                                             'sequence_length_template'][fail_assignments == i].sum() for i in
                                          range(1, len(boundaries))])
 
         bases_by_time = bases_by_time / scaleVal
@@ -836,10 +832,10 @@ class SequenceSummaryHandler(Flounder):
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
-        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'].compute() / 60 / 60,
+        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'] / 60 / 60,
                                        boundaries)
         passed_bases_by_time = np.array([self.seq_sum[self.seq_sum['passes_filtering']][
-                                             'sequence_length_template'].compute()[pass_assignments == i].sum() for i in
+                                             'sequence_length_template'][pass_assignments == i].sum() for i in
                                          range(1, len(boundaries))])
         target_value = passed_bases_by_time.sum() * fraction
         return [target_value, np.interp(target_value, np.cumsum(passed_bases_by_time), boundaries[:-1])]
@@ -852,7 +848,7 @@ class SequenceSummaryHandler(Flounder):
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
 
-        sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
+        sdata = self.seq_sum[self.seq_sum['passes_filtering']]
         # sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
         # sdata['group'] = sdata['group'].astype('category')
         # sdata['rate'] = sdata['sequence_length_template'] / sdata['duration']
@@ -891,7 +887,7 @@ class SequenceSummaryHandler(Flounder):
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
 
-        sdata = self.seq_sum[self.seq_sum['passes_filtering']].compute()
+        sdata = self.seq_sum[self.seq_sum['passes_filtering']]
         #sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
         #sdata['group'] = sdata['group'].astype('category')
         sdata = sdata.reindex(columns=sdata.columns.tolist() + ['group'])
@@ -961,7 +957,7 @@ class SequenceSummaryHandler(Flounder):
              return None
          passed = self.seq_sum[self.seq_sum["passes_filtering"]]
          barcode_content = np.unique(
-             passed["barcode_arrangement"].compute(), 
+             passed["barcode_arrangement"], 
              return_counts=True, return_inverse=True)
          
          barcode_df = pd.DataFrame({"barcode":barcode_content[0], 
@@ -971,10 +967,10 @@ class SequenceSummaryHandler(Flounder):
              key = barcode_content[0][x]
              #print("x == %s == %s" % (x, key))
              passed_bc = passed[passed.barcode_arrangement == key]
-             seql = passed_bc.sequence_length_template.compute()
-             seqq = passed_bc.mean_qscore_template.compute()
+             seql = passed_bc.sequence_length_template
+             seqq = passed_bc.mean_qscore_template
              geometry = GenomeGeometry(seql)
-             return (len(seql) / passed.compute().shape[0]*100, 
+             return (len(seql) / passed.shape[0]*100, 
                      geometry.calculate_mean_quality(seqq),
                      seql.sum()/1e6, seql.min(), seql.max(), seql.mean(), geometry.get_n_value())
          
@@ -1024,12 +1020,21 @@ class SequenceSummaryHandler(Flounder):
         p.grid.grid_line_color = "white"
         
         return self.handle_output(p, plot_type)
+    
+    
+    def barcode_subset(self, barcode_id):
+        if not self.is_barcoded_dataset():
+             return None
+        barcodes = self.tabulate_barcodes()
+        if barcode_id not in barcodes.index:
+            logging.warning("requested barcode not present in barcode file ...")
+            return None
+        
+        subset = self.seq_sum[self.seq_sum["barcode_arrangement"]==barcode_id]
+        return subset
 
 
-nul = """
-ssh = SequenceSummaryHandler("/Users/srudd/Desktop/Dolores_PromethION_1M.txt")
-ssh.executive_summary()
-"""
+
 
 
 class SequencingSummaryGetChannelMap:
@@ -1055,7 +1060,7 @@ class SequencingSummaryGetChannelMap:
         """
 
         platform = "MinION"
-        max_channel = self.seq_sum['channel'].max().compute()
+        max_channel = self.seq_sum['channel'].max()
         logging.debug("MaxChannel == ", max_channel)
 
         if max_channel < 130:
@@ -1179,9 +1184,13 @@ class SequencingSummaryGetChannelMap:
     def get_platform_density(self):
         platform_map = self.get_platform_map()
         # collapse the channel data to get count information ...
-        channel_counts = self.seq_sum.groupby('channel')['channel'].agg(['count']).compute()
+        channel_counts = self.seq_sum.groupby('channel')['channel'].agg(['count'])
         # merge the count data with the map coordinates
-        return pd.merge(platform_map, channel_counts, on='channel', how='left')
+        channel_coords_counts = pd.merge(platform_map, channel_counts, on='channel', how='left')
+        if self.get_platform() == "MinION":
+            logging.info("rotating MinION data")
+            channel_coords_counts = channel_coords_counts.rename(columns={"row": "column", "column": "row"})
+        return channel_coords_counts
     
     
 class FixSequencingSummary:
