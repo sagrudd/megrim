@@ -12,6 +12,7 @@ import numpy as np
 import math
 import sys
 import os
+from math import log10
 import matplotlib as mpl
 from tqdm import tqdm
 from scipy import stats
@@ -408,7 +409,7 @@ class SequenceSummaryHandler(Flounder):
         return ip.plot_infographic(plot_width, plot_dpi)
 
 
-    def calculate_n_val(self, data, n):
+    def calculate_n_val(self, data, n=50):
         ldata = data.sort_values(ascending=False).reset_index(drop=True)
         n_sum = int(ldata.sum())
         n_targ = n_sum * (n / 100)
@@ -494,8 +495,6 @@ class SequenceSummaryHandler(Flounder):
                    background_fill_color="lightgrey", plot_width=plot_width, 
                    plot_height=plot_height, tools=plot_tools,
                    x_range=Range1d(0, longest_read))
-        
-       
         
         p.quad(source=passed, top=plot_key, bottom=plot_base, left='left', right='right',
               fill_color='colour', line_color="white", legend_field='classification')
@@ -707,71 +706,59 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
     
 
-    def plot_time_duty_reads(self, interval_mins=15, cumulative=True, 
+    def plot_time_duty_reads(self, interval_mins=60, cumulative=True, 
                              include_total=False, include_failed=True, 
                              **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
-        # seq_sum['start_time'] is measured in seconds
-        boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
-                                 endpoint=True, retstep=False)
-        assignments = np.digitize(self.seq_sum['start_time'] / 60 / 60, boundaries)
-        pass_assignments = np.digitize(self.seq_sum[self.seq_sum['passes_filtering']]['start_time'] / 60 / 60,
-                                       boundaries)
-        fail_assignments = np.digitize(
-            self.seq_sum[~self.seq_sum['passes_filtering']]['start_time'] / 60 / 60, boundaries)
-        time_counts = np.unique(assignments, return_counts=True, return_inverse=True)
-        pass_time_counts = np.unique(pass_assignments, return_counts=True, return_inverse=True)
-        fail_time_counts = np.unique(fail_assignments, return_counts=True, return_inverse=True)
-
-        # there is a need for some additional logic here ... the np.unique
-        # only returns the count for the assignments prepared by np.digitize
-        # - if we have a run that produces no reads in a given time window,
-        # the counts will go out of sync ...
-        corrected_time_counts = np.repeat(0, len(boundaries))
-        corrected_time_counts[time_counts[0]] = time_counts[2]
-        corrected_pass_time_counts = np.repeat(0, len(boundaries))
-        corrected_pass_time_counts[pass_time_counts[0]] = pass_time_counts[2]
-        corrected_fail_time_counts = np.repeat(0, len(boundaries))
-        corrected_fail_time_counts[fail_time_counts[0]] = fail_time_counts[2]
-
-        if cumulative:
-            corrected_time_counts = np.cumsum(corrected_time_counts)
-            corrected_pass_time_counts = np.cumsum(corrected_pass_time_counts)
-            corrected_fail_time_counts = np.cumsum(corrected_fail_time_counts)
-
+        (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
+        t_seq_res = temporal_seq_res.copy(deep=True)
+        
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
         plot.yaxis.formatter = NumeralTickFormatter(format="0,0")
-        if include_total:
-            plot.line(boundaries[:-1], corrected_time_counts[1:], line_width=2, line_color='black',
-                      legend_label='Total reads')
-        plot.line(boundaries[:-1], corrected_pass_time_counts[1:], line_width=2, line_color='#1F78B4',
+        
+        if cumulative:
+            if include_total:
+                plot.line(boundaries[:-1], np.cumsum(t_seq_res.counter), line_width=2, line_color='black', 
+                          legend_label='Total reads')
+            plot.line(boundaries[:-1], np.cumsum(t_seq_res.pass_reads), line_width=2, line_color='#1F78B4',
                   legend_label='Passed reads')
-        if include_failed:
-            plot.line(boundaries[:-1], corrected_fail_time_counts[1:], line_width=2, line_color='#A6CEE3',
-                      legend_label='Failed reads')
-
+            if include_failed:
+                plot.line(boundaries[:-1], np.cumsum(t_seq_res.fail_reads), line_width=2, line_color='#A6CEE3', 
+                          legend_label='Failed reads')
+            plot.legend.location = "top_left"
+        else:
+            if include_total:
+                plot.line(boundaries[:-1], t_seq_res.counter, line_width=2, line_color='black', 
+                          legend_label='Total reads')
+            plot.line(boundaries[:-1], t_seq_res.pass_reads, line_width=2, line_color='#1F78B4',
+                  legend_label='Passed reads')
+            if include_failed:
+                plot.line(boundaries[:-1], t_seq_res.fail_reads, line_width=2, line_color='#A6CEE3', 
+                          legend_label='Failed reads')
         return self.handle_output(plot, plot_type)
 
 
     @functools.lru_cache()
-    def extract_temporal_data(self, interval_mins=30):
+    def extract_temporal_data(self, interval_mins=60):
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
         assignments = np.digitize(self.seq_sum['start_time'] / 60 / 60, boundaries)
 
-        t_seq_sum = self.seq_sum[["sequence_length_template", "passes_filtering"]]
+        t_seq_sum = self.seq_sum[["sequence_length_template", "passes_filtering", "channel", "duration"]]
         
         t_seq_sum =  t_seq_sum.reindex(columns=t_seq_sum.columns.tolist() + 
                                        ["batch", "counter", "pass_bases",
-                                        "fail_bases", "pass_reads", "fail_reads"])     
-        t_seq_sum.iloc[:,[2]] = assignments
-        t_seq_sum.iloc[:,[3]]=1
-        t_seq_sum.iloc[:,[4,5,6,7]]=0
+                                        "fail_bases", "pass_reads", "fail_reads",
+                                        "rate"])     
+        t_seq_sum.loc[:,["batch"]] = assignments
+        t_seq_sum.loc[:,["counter"]]=1
+        t_seq_sum.loc[:,["pass_bases","fail_bases", "pass_reads", "fail_reads", "rate"]]=0
+        
+        t_seq_sum.loc[:, "rate"] = t_seq_sum['sequence_length_template'] / t_seq_sum['duration']
         
         t_seq_sum.loc[~t_seq_sum.passes_filtering, ["fail_reads"]] = 1
         t_seq_sum.loc[t_seq_sum.passes_filtering, ["pass_reads"]] = 1
@@ -781,13 +768,16 @@ class SequenceSummaryHandler(Flounder):
         t_seq_res = t_seq_sum.groupby(["batch"]).agg(
             {"batch": "first", "sequence_length_template": np.sum, 
              "counter": np.sum, "fail_reads": np.sum, "pass_reads": np.sum,
-             "pass_bases": np.sum, "fail_bases": np.sum })
+             "pass_bases": np.sum, "fail_bases": np.sum, 
+             "channel": pd.Series.nunique, "rate": 
+                 lambda x: (x.quantile(q=0.25), x.quantile(q=0.5), x.quantile(q=0.75))})
         t_seq_res = t_seq_res.reindex(pd.Index(pd.Series(boundaries).index, name="hh")).reset_index()
-        
+        t_seq_res = t_seq_res.fillna(0)
+        #t_seq_res = t_seq_res.loc[t_seq_res.batch > 0]
         return (boundaries, t_seq_res.drop("hh", axis=1))
         
 
-    def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", 
+    def plot_time_duty_bases(self, interval_mins=60, scale="Gigabases", 
                              cumulative=True, milestones=[0.5, 0.9], 
                              include_total=False, include_failed=True,
                              **kwargs):
@@ -804,6 +794,7 @@ class SequenceSummaryHandler(Flounder):
 
         (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
         t_seq_res = temporal_seq_res.copy(deep=True)
+        
         # this deep data copy is required because we are scaling the data
         # and this messes with the core cached object ...
         t_seq_res.iloc[:,[1,5,6]] = t_seq_res.iloc[:,[1,5,6]] / scaleVal
@@ -849,66 +840,47 @@ class SequenceSummaryHandler(Flounder):
     def plot_translocation_speed(self, interval_mins=60, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
-        #print("plotting translocation speed ...")
-        boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
-                                 endpoint=True, retstep=False)
+        
+        (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
+        t_seq_res = temporal_seq_res.copy(deep=True)
+        t_seq_res = t_seq_res.loc[t_seq_res.batch > 0]
 
-        sdata = self.seq_sum[self.seq_sum['passes_filtering']]
-        # sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
-        # sdata['group'] = sdata['group'].astype('category')
-        # sdata['rate'] = sdata['sequence_length_template'] / sdata['duration']
-        sdata = sdata.reindex(columns=sdata.columns.tolist() + ['group'])
-        sdata = sdata.reindex(columns=sdata.columns.tolist() + ['rate'])
-        sdata.loc[:, "group"] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
-        sdata.loc[:, "rate"] = sdata['sequence_length_template'] / sdata['duration']
-        sdata.loc[:, "group"] = sdata['group'].astype('category')
-        groups = sdata.groupby('group')
-        q1 = groups['rate'].quantile(q=0.25)
-        q2 = groups['rate'].quantile(q=0.5)
-        q3 = groups['rate'].quantile(q=0.75)
-        iqr = q3 - q1
-        upper = q3 + 1.5 * iqr
-        lower = q1 - 1.5 * iqr
+        iqrd = pd.DataFrame(t_seq_res.rate.tolist(), columns=["q1","q2","q3"])
+        iqrd["iqr"] = iqrd["q3"] - iqrd["q1"]
+        
+        iqrd["upper"] = iqrd["q3"] + 1.5 * iqrd["iqr"]
+        iqrd["lower"] = iqrd["q1"] - 1.5 * iqrd["iqr"]
 
         plot = figure(title='Plot showing sequencing rate against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequencing rate (bases/s)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
-        plot.segment(np.unique(sdata['group']), upper, np.unique(sdata['group']), q3, line_color="black")
-        plot.segment(np.unique(sdata['group']), lower, np.unique(sdata['group']), q1, line_color="black")
-        plot.vbar(np.unique(sdata['group']), 0.7, q2, q3, fill_color="#E08E79", line_color="black")
-        plot.vbar(np.unique(sdata['group']), 0.7, q1, q2, fill_color="#3B8686", line_color="black")
+        time_points = boundaries[t_seq_res.index.tolist()]
 
-        plot.rect(np.unique(sdata['group']), lower, 0.2, 0.01, line_color="black")
-        plot.rect(np.unique(sdata['group']), upper, 0.2, 0.01, line_color="black")
+        plot.segment(time_points, iqrd["upper"], time_points, iqrd["q3"], line_color="black")
+        plot.segment(time_points, iqrd["lower"], time_points, iqrd["q1"], line_color="black")
+        plot.vbar(time_points, 0.7, iqrd["q2"], iqrd["q3"], fill_color="#E08E79", line_color="black")
+        plot.vbar(time_points, 0.7, iqrd["q1"], iqrd["q2"], fill_color="#3B8686", line_color="black")
+
+        plot.rect(time_points, iqrd["lower"], 0.2, 0.01, line_color="black")
+        plot.rect(time_points, iqrd["upper"], 0.2, 0.01, line_color="black")
 
         return self.handle_output(plot, plot_type)
 
     def plot_functional_channels(self, interval_mins=60, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
-        #print("plotting active channel count ...")
-        boundaries = np.linspace(0, self.get_runtime(units='hours'),
-                                 num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
-                                 endpoint=True, retstep=False)
+        (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
+        t_seq_res = temporal_seq_res.copy(deep=True)
+        t_seq_res = t_seq_res.loc[t_seq_res.batch > 0]
 
-        sdata = self.seq_sum[self.seq_sum['passes_filtering']]
-        #sdata['group'] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
-        #sdata['group'] = sdata['group'].astype('category')
-        sdata = sdata.reindex(columns=sdata.columns.tolist() + ['group'])
-        sdata.loc[:, "group"] = np.digitize(sdata['start_time'] / 60 / 60, boundaries)
-        
-        groups = sdata.groupby('group')
-
-        channel_count = groups['channel'].nunique()
-        time_chunks = np.unique(sdata['group'])
+        time_points = boundaries[t_seq_res.index.tolist()]
 
         plot = figure(title='Plot showing number of observed channels against time', x_axis_label='Time (hours)',
                       y_axis_label='Number of active channels (n)', background_fill_color="lightgrey",
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
-        plot.step(boundaries[time_chunks], channel_count, line_width=2, mode="before")
+        plot.step(time_points, t_seq_res.channel, line_width=2, mode="before")
         return self.handle_output(plot, plot_type)
 
     def is_barcoded_dataset(self):
@@ -957,50 +929,49 @@ class SequenceSummaryHandler(Flounder):
         ip = InfographicPlot(infographic_data, rows=1, columns=3)
         return ip.plot_infographic(plot_width, plot_dpi)
 
+
+    def calculate_mean_quality(self, series):
+        series = series.dropna()
+        return -10 * log10((10 ** (series / -10)).mean())
+
     @functools.lru_cache()
     def tabulate_barcodes(self, threshold=0.01):
-         if not self.is_barcoded_dataset():
-             return None
-         passed = self.seq_sum[self.seq_sum["passes_filtering"]]
-         barcode_content = np.unique(
-             passed["barcode_arrangement"], 
-             return_counts=True, return_inverse=True)
-         
-         barcode_df = pd.DataFrame({"barcode":barcode_content[0], 
-                                    "count": barcode_content[2]}).set_index("barcode")
-         
-         def barcode_hunt(x):
-             key = barcode_content[0][x]
-             #print("x == %s == %s" % (x, key))
-             passed_bc = passed[passed.barcode_arrangement == key]
-             seql = passed_bc.sequence_length_template
-             seqq = passed_bc.mean_qscore_template
-             geometry = GenomeGeometry(seql)
-             return (len(seql) / passed.shape[0]*100, 
-                     geometry.calculate_mean_quality(seqq),
-                     seql.sum()/1e6, seql.min(), seql.max(), seql.mean(), geometry.get_n_value())
-         
+        
+        #                 count      %  mean_q   Mbases  min    max     mean   N50
+        # barcode                                                                 
+        # barcode13     1214588  20.01    9.99  1293.22   99  18083  1064.74  1449
+        # barcode14      209101   3.44   10.21   574.31  113  26524  2746.56  4216
+        # barcode15      302139   4.98   10.51   626.24  109  23819  2072.68  3150
+        # barcode16      712198  11.73    9.60   793.14   99  22310  1113.65  1399
+        # barcode17      170766   2.81    9.75   553.92  120  38787  3243.73  4748
+        # barcode18      381919   6.29   10.73   617.82  114  37278  1617.68  1876
+        # barcode19     1466471  24.16    9.89  1181.75  100  22467   805.84   991
+        # barcode20      425504   7.01   10.34   637.81  120  17546  1498.94  1785
+        # barcode21      284316   4.68   10.70   685.86   94  56933  2412.30  3188
+        # barcode22       72651   1.20   10.30   247.74  125  29081  3409.97  4828
+        # barcode23      283466   4.67   10.08   990.50   97  27473  3494.26  4899
+        # barcode24       89448   1.47    9.78   239.63  114  30395  2678.96  4219
+        # unclassified   457684   7.54    9.47   727.47   57  50869  1589.47  2594
+        
+        bc_seq_sum = self.seq_sum.loc[self.seq_sum.passes_filtering, ["sequence_length_template", "barcode_arrangement", "mean_qscore_template"]]
+        bc_seq_sum["count"]=1
+        total_reads = np.sum(bc_seq_sum["count"])
+        
+        def get_perc(x):
+            return x.sum()/total_reads * 100
             
-         # *very* bad behaviour - there is a continuous fight between pandas
-         # abnd tqdm ... this leads to a silly deprecation warning message 
-         # with load of tqdm.pandas --- masking it to encourage less user
-         # concern on this issue - actively watching
-         warnings.simplefilter("ignore")   
-         tqdm.pandas()
-         
-         bc_data = pd.Series(np.arange(barcode_df.shape[0])).progress_map(barcode_hunt)  
-         
-         bc_data = pd.concat([barcode_df, 
-                              pd.DataFrame(bc_data.tolist(), 
-                                           index=barcode_content[0], 
-                                           columns=["%", "mean_q", "Mbases", "min", "max", "mean", "N50"])], axis=1)
-         bc_data["mean_q"] = bc_data["mean_q"].round(2)
-         bc_data["Mbases"] = bc_data["Mbases"].round(2)
-         bc_data["mean"] = bc_data["mean"].round(2)
-         bc_data["%"] = bc_data["%"].round(2)
-         return bc_data
-
-         
+        bc_res = bc_seq_sum.groupby("barcode_arrangement").agg({"count": [np.sum, get_perc],
+                                                       "mean_qscore_template": [self.calculate_mean_quality], 
+                                                       "sequence_length_template":[np.sum, np.min, np.max, np.mean, self.calculate_n_val]})
+        bc_res.columns = bc_res.columns.droplevel()
+        bc_res.index.name = ''
+        bc_res.columns = ["count","%","mean_q","Mbases","min","max","mean","N50"]
+        
+        bc_res["mean_q"] = bc_res["mean_q"].round(2)
+        bc_res["Mbases"] = bc_res["Mbases"].round(2)
+        bc_res["mean"] = bc_res["mean"].round(2)
+        bc_res["%"] = bc_res["%"].round(2)
+        return bc_res
 
     def plot_barcodes(self, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
@@ -1018,7 +989,6 @@ class SequenceSummaryHandler(Flounder):
                width=0.75, fill_alpha=0.7, fill_color="#1F78B4")
 
         p.y_range.start = 0
-        p.legend.location = "center_right"
         p.xaxis.axis_label = 'Barcode assignment'
         p.yaxis.axis_label = "Number of Reads"
         p.yaxis.formatter = NumeralTickFormatter(format="0,0")
