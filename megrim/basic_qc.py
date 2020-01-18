@@ -146,7 +146,7 @@ class SequenceSummaryHandler(Flounder):
                          'sequence_length_template': "int64",
                          'mean_qscore_template': "float64",
                          }
-            data["passes_filtering"] = (data["passes_filtering"]=='True')
+            data["passes_filtering"] = (data["passes_filtering"]=='TRUE')
             for key in type_info.keys():
                 if key in data.columns:
                     data = data.astype({key: type_info.get(key)})
@@ -408,11 +408,18 @@ class SequenceSummaryHandler(Flounder):
         return ip.plot_infographic(plot_width, plot_dpi)
 
 
-    def plot_sequence_length(self, normalised=True,
-                             include_failed=True, bins=30,
-                             annotate_mean=True, annotate_n50=True, 
-                             longest_read=None, **kwargs):
-        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+    def calculate_n_val(self, data, n):
+        ldata = data.sort_values(ascending=False).reset_index(drop=True)
+        n_sum = int(ldata.sum())
+        n_targ = n_sum * (n / 100)
+        accumulated = ldata.cumsum()
+        aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
+        N = ldata[aindex]
+        return N
+
+
+    @functools.lru_cache()
+    def extract_size_stratified_data(self, longest_read, bins):
         
         l_seq_sum = self.seq_sum[["sequence_length_template", "passes_filtering"]]
         
@@ -423,6 +430,7 @@ class SequenceSummaryHandler(Flounder):
         assignments = np.digitize(l_seq_sum.sequence_length_template, boundaries)
         
         l_seq_sum = l_seq_sum.reindex(columns=l_seq_sum.columns.tolist()+["batch", "pass_bases", "fail_bases", "pass_reads", "fail_reads"])
+        
         l_seq_sum.iloc[:,[2]] = assignments
         l_seq_sum.iloc[:,[3,4,5,6]] = 0
         l_seq_sum.loc[~l_seq_sum.passes_filtering, ["fail_reads"]] = 1
@@ -434,29 +442,50 @@ class SequenceSummaryHandler(Flounder):
             {"batch": "first",  "fail_reads": np.sum, "pass_reads": np.sum,
              "pass_bases": np.sum, "fail_bases": np.sum })
     
+        # handle the possibility of missing values ... e.g. Dolores
+        l_seq_res = l_seq_res.reindex(pd.Index(pd.Series(boundaries).index, name="hh")).reset_index()
+        l_seq_res = l_seq_res.drop("hh", axis=1)
+    
         # shape the data for quad presentation ...
         l_seq_res = l_seq_res.reindex(columns=l_seq_res.columns.tolist()+["left", "right"])
-        l_seq_res.iloc[:,[5]] = boundaries[:-1]
-        l_seq_res.iloc[:,[6]] = boundaries[1:]
+        l_seq_res.iloc[1:,[5]] = boundaries[:-1, np.newaxis]
+        l_seq_res.iloc[1:,[6]] = boundaries[1:, np.newaxis]
+        return (longest_read,
+                boundaries, 
+                l_seq_res.fillna(0), 
+                l_seq_sum.sequence_length_template.mean(), 
+                self.calculate_n_val(l_seq_sum.sequence_length_template, 50))
+
+
+    def plot_sequence_length(self, normalised=True,
+                             include_failed=True, bins=30,
+                             annotate_mean=True, annotate_n50=True, 
+                             longest_read=None, **kwargs):
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        
+        longest_read, boundaries, l_seq_res, mean_val, N = self.extract_size_stratified_data(longest_read=longest_read, bins=bins)
 
         if include_failed:
-            if not normalised:
+            if normalised:
+                failed = pd.DataFrame({"bases":l_seq_res["fail_bases"].tolist(), "bases_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+                passed = pd.DataFrame({"bases":(l_seq_res["pass_bases"] + l_seq_res["fail_bases"]).tolist(), "bases_line": l_seq_res["fail_bases"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+            else:
                 failed = pd.DataFrame({"reads":l_seq_res["fail_reads"].tolist(), "reads_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
                 passed = pd.DataFrame({"reads":(l_seq_res["pass_reads"] + l_seq_res["fail_reads"]).tolist(), "reads_line": l_seq_res["fail_reads"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
-            else:
-                failed = pd.DataFrame({"bases":l_seq_res["pass_bases"].tolist(), "reads_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
-                passed = pd.DataFrame({"bases":(l_seq_res["pass_bases"] + l_seq_res["fail_bases"]).tolist(), "bases_line": l_seq_res["fail_bases"].tolist(), "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
             passed = passed.append(failed, sort=False)
         else:
-            if not normalised:
-                passed = pd.DataFrame({"reads":l_seq_res["pass_reads"].tolist(), "reads_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
-            else:
+            if normalised:
                 passed = pd.DataFrame({"bases":l_seq_res["pass_bases"].tolist(), "bases_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
-           
-        plot_base = 'bases_line'
-        plot_key = 'bases'
-        plot_legend = "count (bases)"
-        if not normalised:
+            else:
+                passed = pd.DataFrame({"reads":l_seq_res["pass_reads"].tolist(), "reads_line": 0, "classification": "passed", "colour": "#1F78B4", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
+                
+        if normalised:
+            passed = passed.loc[passed.bases > 0,]
+            plot_base = 'bases_line'
+            plot_key = 'bases'
+            plot_legend = "count (bases)"
+        else:
+            passed = passed.loc[passed.reads > 0,]
             logging.info("using read counts instead of bases!")
             plot_base = 'reads_line'
             plot_key = 'reads'
@@ -466,26 +495,24 @@ class SequenceSummaryHandler(Flounder):
                    background_fill_color="lightgrey", plot_width=plot_width, 
                    plot_height=plot_height, tools=plot_tools,
                    x_range=Range1d(0, longest_read))
+        
+       
+        
         p.quad(source=passed, top=plot_key, bottom=plot_base, left='left', right='right',
-               fill_color='colour', line_color="white", legend_field='classification')
+              fill_color='colour', line_color="white", legend_field='classification')
   
         if annotate_mean:
-            vline = Span(location=l_seq_sum.sequence_length_template.mean(), dimension='height', line_color='red', line_width=2)
+            vline = Span(location=mean_val, dimension='height', line_color='red', line_width=2)
             p.renderers.extend([vline])
             p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
-                                  source=ColumnDataSource(data=dict(x=[l_seq_sum.sequence_length_template.mean()],
+                                  source=ColumnDataSource(data=dict(x=[mean_val],
                                                                     y=[passed[plot_key].max()],
                                                                     text=['Mean'])),
                                   render_mode='canvas', text_align='right', text_color="red"))
 
 
         if annotate_n50:
-            ldata = l_seq_sum.sequence_length_template.sort_values(ascending=False).reset_index(drop=True)
-            n_sum = int(ldata.sum())
-            n_targ = n_sum * (50 / 100)
-            accumulated = ldata.cumsum()
-            aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
-            N = ldata[aindex]
+
             vline = Span(location=N, dimension='height', line_color='orange', line_width=2)
             p.renderers.extend([vline])
             p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph',
@@ -732,7 +759,7 @@ class SequenceSummaryHandler(Flounder):
 
 
     @functools.lru_cache()
-    def extract_temporal_data(self, interval_mins):
+    def extract_temporal_data(self, interval_mins=30):
         boundaries = np.linspace(0, self.get_runtime(units='hours'),
                                  num=int(self.get_runtime(units='hours') * 60 / interval_mins + 1),
                                  endpoint=True, retstep=False)
@@ -746,6 +773,7 @@ class SequenceSummaryHandler(Flounder):
         t_seq_sum.iloc[:,[2]] = assignments
         t_seq_sum.iloc[:,[3]]=1
         t_seq_sum.iloc[:,[4,5,6,7]]=0
+        
         t_seq_sum.loc[~t_seq_sum.passes_filtering, ["fail_reads"]] = 1
         t_seq_sum.loc[t_seq_sum.passes_filtering, ["pass_reads"]] = 1
         t_seq_sum.loc[t_seq_sum.passes_filtering, ["pass_bases"]] = t_seq_sum.loc[t_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
@@ -755,7 +783,9 @@ class SequenceSummaryHandler(Flounder):
             {"batch": "first", "sequence_length_template": np.sum, 
              "counter": np.sum, "fail_reads": np.sum, "pass_reads": np.sum,
              "pass_bases": np.sum, "fail_bases": np.sum })
-        return (boundaries, t_seq_res)
+        t_seq_res = t_seq_res.reindex(pd.Index(pd.Series(boundaries).index, name="hh")).reset_index()
+        
+        return (boundaries, t_seq_res.drop("hh", axis=1))
         
 
     def plot_time_duty_bases(self, interval_mins=15, scale="Gigabases", 
@@ -813,7 +843,7 @@ class SequenceSummaryHandler(Flounder):
     def get_sequence_base_point(self, fraction=0.5, interval_mins=5, column="pass_bases"):
         (boundaries, t_seq_res) = self.extract_temporal_data(interval_mins)
         target_value = t_seq_res[column].sum() * fraction
-        return (target_value, np.interp(target_value, np.cumsum(t_seq_res[column]), boundaries[:-1]))
+        return (target_value, np.interp(target_value, np.cumsum(t_seq_res[column]), boundaries))
 
 
 
