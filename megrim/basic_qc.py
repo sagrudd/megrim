@@ -530,68 +530,60 @@ class SequenceSummaryHandler(Flounder):
 
         return self.handle_output(p, plot_type)   
     
+    
+    
+    @functools.lru_cache()
+    def extract_quality_stratified_data(self, bins=30):
+    
+        q_seq_sum = self.seq_sum[["mean_qscore_template", "passes_filtering"]]
+        boundaries = np.linspace(self.seq_sum.mean_qscore_template.min(), 
+                                 self.seq_sum.mean_qscore_template.max(), 
+                                 num=bins, endpoint=True, retstep=False)
+        assignments = np.digitize(self.seq_sum.mean_qscore_template, boundaries)
+        q_seq_sum = q_seq_sum.reindex(columns=q_seq_sum.columns.tolist()+["batch", "pass_reads", "fail_reads"])
+        
+        q_seq_sum.iloc[:,[2]] = assignments
+        q_seq_sum.iloc[:,[3,4]] = 0
+        q_seq_sum.loc[~q_seq_sum.passes_filtering, ["fail_reads"]] = 1
+        q_seq_sum.loc[q_seq_sum.passes_filtering, ["pass_reads"]] = 1
+        
+        q_seq_res = q_seq_sum.groupby(["batch"]).agg(
+            {"batch": "first",  "fail_reads": np.sum, "pass_reads": np.sum})
+
+        # handle the possibility of missing values ... e.g. Dolores
+        q_seq_res = q_seq_res.reindex(pd.Index(pd.Series(boundaries).index, name="hh")).reset_index()
+        q_seq_res = q_seq_res.drop("hh", axis=1)
+        # shape the data for quad presentation ...
+        q_seq_res = q_seq_res.reindex(columns=q_seq_res.columns.tolist()+["left", "right"])
+        q_seq_res.loc[1:,["left"]] = boundaries[:-1, np.newaxis]
+        q_seq_res.loc[1:,["right"]] = boundaries[1:, np.newaxis]
+        
+        return boundaries, q_seq_res
+    
 
     def plot_q_distribution(self, bins=30, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
-        q_pass = pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template'] )
-        q_pass = q_pass.sort_values(ascending=False).reset_index(drop=True)
-
-        q_fail = pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template'] )
-        q_fail = q_fail.sort_values(ascending=False).reset_index(drop=True)
-
-        boundaries = np.linspace(q_fail.min(), q_pass.max(), num=bins, endpoint=True, retstep=False)
-        indsP = np.digitize(q_pass, boundaries)
-        indsF = np.digitize(q_fail, boundaries)
-        logging.debug(indsP)
-        countsP = np.unique(indsP, return_counts=True, return_inverse=True)
-        countsF = np.unique(indsF, return_counts=True, return_inverse=True)
-
-        dfP = pd.DataFrame({'count_line': np.repeat(0, bins - 1),
-                            'count': np.repeat(0, bins - 1),
-                            'classification': 'passed',
-                            'colour': "#1F78B4",
-                            'left': boundaries[:-1],
-                            'right': boundaries[1:]})
-        dfP.loc[bins - 1] = np.array([0, 0, 'passed', "#1F78B4", dfP.right[bins - 2],
-                                      dfP.right[bins - 2] + (dfP.right[bins - 2] - dfP.left[bins - 2])])
-        dfP.loc[countsP[0] - 1, 'count'] = countsP[2]
-
-        dfF = pd.DataFrame({'count_line': np.repeat(0, bins - 1),
-                            'count': np.repeat(0, bins - 1),
-                            'classification': 'failed',
-                            'colour': "#A6CEE3",
-                            'left': boundaries[:-1],
-                            'right': boundaries[1:]})
-        dfF.loc[bins - 1] = np.array([0, 0, 'failed', "#A6CEE3", dfF.right[bins - 2],
-                                      dfF.right[bins - 2] + (dfF.right[bins - 2] - dfF.left[bins - 2])])
-        dfF.loc[countsF[0] - 1, 'count'] = countsF[2]
-
-        # not sure why ... python eh ... but some explicit casting of type is
-        # required here to encourage these dataframes to merge
-        dfP = dfP.astype({'count': 'int32', 'count_line': 'int32'})
-        dfF = dfF.astype({'count': 'int32', 'count_line': 'int32'})
-
-        dfP['count_line'] = dfF['count']
-        dfP['count'] = dfP['count_line'] + dfP['count']
-
-        dfP = dfP.append(dfF)
-
-        logging.debug(dfP)
-
-        plot_base = 'count_line'
-        plot_key = 'count'
+        boundaries, q_seq_res = self.extract_quality_stratified_data(bins=bins)
+        
+        # and mung the data into something cleaner
+        failed = pd.DataFrame({"reads":q_seq_res["fail_reads"], "reads_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": q_seq_res["left"], "right": q_seq_res["right"]})
+        passed = pd.DataFrame({"reads":(q_seq_res["pass_reads"] + q_seq_res["fail_reads"]), "reads_line": q_seq_res["fail_reads"], "classification": "passed", "colour": "#1F78B4", "left": q_seq_res["left"], "right": q_seq_res["right"]})
+        passed = passed.append(failed, sort=False)
+        
+        plot_base = 'reads_line'
+        plot_key = 'reads'
         plot_legend = "count (reads)"
         p = figure(title="Histogram showing distribution of quality values", 
                    background_fill_color="lightgrey", plot_width=plot_width,
                    plot_height=plot_height, tools=plot_tools)
-        p.quad(source=dfP, top=plot_key, bottom=plot_base, left='left', right='right',
+        p.quad(source=passed, top=plot_key, bottom=plot_base, left='left', right='right',
                fill_color='colour', line_color="white", legend_field='classification', alpha=0.7)
 
         vline = Span(location=7, dimension='height', line_color='green', line_width=2)
         p.renderers.extend([vline])
         p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', 
-                              source=ColumnDataSource(data=dict(x=[7], y=[dfP['count'].max()], text=['Q-filter'])),
+                              source=ColumnDataSource(data=dict(x=[7], y=[passed['reads'].max()], text=['Q-filter'])),
                               render_mode='canvas', text_align='left', text_color="green"))
 
         p.y_range.start = 0
@@ -936,22 +928,6 @@ class SequenceSummaryHandler(Flounder):
 
     @functools.lru_cache()
     def tabulate_barcodes(self, threshold=0.01):
-        
-        #                 count      %  mean_q   Mbases  min    max     mean   N50
-        # barcode                                                                 
-        # barcode13     1214588  20.01    9.99  1293.22   99  18083  1064.74  1449
-        # barcode14      209101   3.44   10.21   574.31  113  26524  2746.56  4216
-        # barcode15      302139   4.98   10.51   626.24  109  23819  2072.68  3150
-        # barcode16      712198  11.73    9.60   793.14   99  22310  1113.65  1399
-        # barcode17      170766   2.81    9.75   553.92  120  38787  3243.73  4748
-        # barcode18      381919   6.29   10.73   617.82  114  37278  1617.68  1876
-        # barcode19     1466471  24.16    9.89  1181.75  100  22467   805.84   991
-        # barcode20      425504   7.01   10.34   637.81  120  17546  1498.94  1785
-        # barcode21      284316   4.68   10.70   685.86   94  56933  2412.30  3188
-        # barcode22       72651   1.20   10.30   247.74  125  29081  3409.97  4828
-        # barcode23      283466   4.67   10.08   990.50   97  27473  3494.26  4899
-        # barcode24       89448   1.47    9.78   239.63  114  30395  2678.96  4219
-        # unclassified   457684   7.54    9.47   727.47   57  50869  1589.47  2594
         
         bc_seq_sum = self.seq_sum.loc[self.seq_sum.passes_filtering, ["sequence_length_template", "barcode_arrangement", "mean_qscore_template"]]
         bc_seq_sum["count"]=1
