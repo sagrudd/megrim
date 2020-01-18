@@ -464,7 +464,6 @@ class SequenceSummaryHandler(Flounder):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         longest_read, boundaries, l_seq_res, mean_val, N = self.extract_size_stratified_data(longest_read=longest_read, bins=bins)
-
         if include_failed:
             if normalised:
                 failed = pd.DataFrame({"bases":l_seq_res["fail_bases"].tolist(), "bases_line": 0, "classification": "failed", "colour": "#A6CEE3", "left": l_seq_res["left"].tolist(), "right": l_seq_res["right"].tolist()})
