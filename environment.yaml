@@ -1,0 +1,15 @@
+channels:
+  - conda-forge
+  - bioconda
+  - sagrudd
+dependencies:
+  - snakemake-minimal
+  - conda-forge:jupyterlab
+  - selenium
+  - phantomjs
+  - papermill
+  - python
+  - cython
+  - pip
+  - pip:
+    - megrim
