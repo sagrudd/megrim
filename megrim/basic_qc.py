@@ -147,7 +147,9 @@ class SequenceSummaryHandler(Flounder):
                          'sequence_length_template': "int64",
                          'mean_qscore_template': "float64",
                          }
-            data["passes_filtering"] = (data["passes_filtering"]=='TRUE')
+            # some older versions of albacore used True | recent versions use TRUE
+            data.passes_filtering = data.passes_filtering.isin(["True", "TRUE"])
+            
             for key in type_info.keys():
                 if key in data.columns:
                     data = data.astype({key: type_info.get(key)})
@@ -159,7 +161,7 @@ class SequenceSummaryHandler(Flounder):
             logging.error("ERROR - this is an unexpected edge case ...")
             sys.exit(0)
         # start excluding dask columns that are not of core interest
-        keep = ['channel', 'start_time', 'duration', 'num_events',
+        keep = ['read_id', 'channel', 'start_time', 'duration', 'num_events',
                 'sequence_length_template', 'mean_qscore_template',
                 'passes_filtering', 'barcode_arrangement',
                 ]
@@ -171,7 +173,35 @@ class SequenceSummaryHandler(Flounder):
         pbar.register()
         with Timer("Elapsed time to extract sequence data {}"):
             self.seq_sum = self.seq_sum.compute()
+            self.seq_sum = self.seq_sum.set_index('read_id')
         pbar.unregister()
+
+    @functools.lru_cache()
+    def import_barcodes_file(self, barcode_file):
+        logging.info("importing barcode file {}".format(barcode_file))
+
+        extension = os.path.splitext(barcode_file)[1].lower()
+        compression = None
+        blocksize = 6400000
+        if extension == ".bz2":
+            compression = "bz2"
+            blocksize = None
+        elif extension in [".gzip", ".gz"]:
+            compression = "gzip"
+            blocksize = None
+
+        pbar = ProgressBar()
+        pbar.register()
+        data = dd.read_csv(barcode_file, delimiter="\t", compression=compression, blocksize=blocksize, dtype="object")
+        data = data.iloc[:,[0,1]].compute()
+        pbar.unregister()
+        data = data.set_index('read_id')
+        return data
+    
+    def merge_barcodes_file(self, barcode_file):
+        bc_data = self.import_barcodes_file(barcode_file)
+        self.seq_sum = pd.concat([self.seq_sum, bc_data], axis=1, join='inner')
+        
 
     def get_flowcell_id(self):
         """
@@ -763,7 +793,8 @@ class SequenceSummaryHandler(Flounder):
                  lambda x: (x.quantile(q=0.25), x.quantile(q=0.5), x.quantile(q=0.75))})
         t_seq_res = t_seq_res.reindex(pd.Index(pd.Series(boundaries).index, name="hh")).reset_index()
         t_seq_res = t_seq_res.fillna(0)
-        #t_seq_res = t_seq_res.loc[t_seq_res.batch > 0]
+        # remove 0 val - this is added during feature filling ...
+        t_seq_res = t_seq_res.loc[t_seq_res.batch > 0,:]
         return (boundaries, t_seq_res.drop("hh", axis=1))
         
 
@@ -823,7 +854,7 @@ class SequenceSummaryHandler(Flounder):
     def get_sequence_base_point(self, fraction=0.5, interval_mins=5, column="pass_bases"):
         (boundaries, t_seq_res) = self.extract_temporal_data(interval_mins)
         target_value = t_seq_res[column].sum() * fraction
-        return (target_value, np.interp(target_value, np.cumsum(t_seq_res[column]), boundaries))
+        return (target_value, np.interp(target_value, np.cumsum(t_seq_res[column]), boundaries[:-1]))
 
 
 
@@ -890,15 +921,13 @@ class SequenceSummaryHandler(Flounder):
         """
         return "barcode_arrangement" in self.seq_sum.columns
 
-    def merge_barcode_summary(self, barcode_summary_file):
-        i = 1
 
-    def plot_barcode_info(self, **kwargs):
+    def plot_barcode_info(self, threshold=1, **kwargs):
         if not self.is_barcoded_dataset():
              return None
         (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
 
-        barcodes = self.tabulate_barcodes()
+        barcodes = self.tabulate_barcodes(threshold=threshold)
         bi = pd.Series(barcodes.index)
 
         classified = barcodes.iloc[bi[bi != "unclassified"].index.values]
@@ -925,7 +954,7 @@ class SequenceSummaryHandler(Flounder):
         return -10 * log10((10 ** (series / -10)).mean())
 
     @functools.lru_cache()
-    def tabulate_barcodes(self, threshold=0.01):
+    def tabulate_barcodes(self, threshold=1):
         
         bc_seq_sum = self.seq_sum.loc[self.seq_sum.passes_filtering, ["sequence_length_template", "barcode_arrangement", "mean_qscore_template"]]
         bc_seq_sum["count"]=1
@@ -945,14 +974,17 @@ class SequenceSummaryHandler(Flounder):
         bc_res["Mbases"] = bc_res["Mbases"].round(2)
         bc_res["mean"] = bc_res["mean"].round(2)
         bc_res["%"] = bc_res["%"].round(2)
+        
+        bc_res = bc_res.loc[bc_res["%"] > threshold,:]
+        
         return bc_res
 
-    def plot_barcodes(self, **kwargs):
+    def plot_barcodes(self, threshold=1, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         if not self.is_barcoded_dataset():
             return None
-        barcodes = self.tabulate_barcodes()
+        barcodes = self.tabulate_barcodes(threshold=threshold)
          
         p = figure(title="Histogram showing abundance of different barcodes", 
                    background_fill_color="lightgrey", plot_width=plot_width,
