@@ -518,8 +518,6 @@ class SequenceSummaryHandler(Flounder):
                                                                     y=[passed[plot_key].max()],
                                                                     text=['N50'])),
                                   render_mode='canvas', text_align='left', text_color="orange"))
-
-    
         p.y_range.start = 0
         p.legend.location = "center_right"
         p.xaxis.axis_label = 'Sequence length (nt)'
@@ -531,13 +529,22 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)   
     
     
+    @functools.lru_cache()
+    def get_passed_mean_length(self):
+        return int(self.seq_sum.loc[
+            self.seq_sum.passes_filtering, ["sequence_length_template"]].mean())
+    
     
     @functools.lru_cache()
-    def extract_quality_stratified_data(self, bins=30):
+    def extract_quality_stratified_data(self, bins=30, min=None, max=None):
     
+        if min is None:
+            min = self.seq_sum.mean_qscore_template.min()
+        if max is None:
+            max = self.seq_sum.mean_qscore_template.max()
+        
         q_seq_sum = self.seq_sum[["mean_qscore_template", "passes_filtering"]]
-        boundaries = np.linspace(self.seq_sum.mean_qscore_template.min(), 
-                                 self.seq_sum.mean_qscore_template.max(), 
+        boundaries = np.linspace(min, max, 
                                  num=bins, endpoint=True, retstep=False)
         assignments = np.digitize(self.seq_sum.mean_qscore_template, boundaries)
         q_seq_sum = q_seq_sum.reindex(columns=q_seq_sum.columns.tolist()+["batch", "pass_reads", "fail_reads"])
@@ -596,24 +603,20 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
     
 
-    def plot_q_l_density(self, xbins=100, ybins=100, longest_read=6000,
-                         highest_q=15, plot_depth_threshold=100, **kwargs):
+    def plot_q_l_density(self, xbins=100, ybins=100, longest_read=None,
+                         min_q=None, max_q=None, plot_depth_threshold=100, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
-        
-        # a few long reads can skew the figure - shave the data to focus on points of interest
 
-        q_boundaries = np.linspace(2, highest_q, num=ybins, endpoint=True, retstep=False)
+        if min_q is None:
+            min_q = self.seq_sum.mean_qscore_template.min()
+        if max_q is None:
+            max_q = self.seq_sum.mean_qscore_template.max()
+        if longest_read is None:
+            longest_read = self.seq_sum.sequence_length_template.max()
+
+        q_boundaries = np.linspace(min_q, max_q, num=ybins, endpoint=True, retstep=False)
         # l_boundaries = np.linspace(np.log10(100), np.log10(longest_read), num=xbins, endpoint=True)
         l_boundaries = np.logspace(np.log10(100), np.log10(longest_read), num=xbins)
-
-        logging.debug(q_boundaries)
-
-        logging.debug(l_boundaries)
-
-        geometry = GenomeGeometry(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template']))
-
-        # are there NaN in the dataset? There shouldn't be ...
 
         binned2d = stats.binned_statistic_2d(
             self.seq_sum['sequence_length_template'],
@@ -621,8 +624,6 @@ class SequenceSummaryHandler(Flounder):
             np.repeat(1, len(self.seq_sum)), 'count',
             bins=[l_boundaries, q_boundaries]
         )
-        # this gives x and y (obligate) and a count ... can we plot this?
-
         layout = pd.DataFrame(binned2d.statistic)
         # layout = layout.transpose()
         layout.columns = binned2d.y_edge[:-1]
@@ -646,15 +647,13 @@ class SequenceSummaryHandler(Flounder):
             c2 = np.array(mpl.colors.to_rgb(c2))
             return mpl.colors.to_hex((1 - mix) * c1 + mix * c2)
 
-        c1 = '#A6CEE3'  # blue
-        c2 = 'blue'  # green
+        c1 = '#A6CEE3'
+        c2 = 'blue'  
         n = 75
 
         for x in range(n + 1):
             colors.append(colorFader(c1, c2, x / n))
 
-            # colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
-        # colors = Inferno256
         mapper = LinearColorMapper(palette=colors, low=layout['count'].min() + 1, high=layout['count'].max())
 
         p = figure(title="Density plot showing relationship between quality and read length",
@@ -664,7 +663,7 @@ class SequenceSummaryHandler(Flounder):
 
         p.title.text_font_size = '18pt'
 
-        p.rect(x="column", y="row", width="width", height=highest_q / ybins,
+        p.rect(x="column", y="row", width="width", height=max_q / ybins,
                source=layout,
                fill_color={'field': 'count', 'transform': mapper},
                line_color=None,
@@ -685,12 +684,11 @@ class SequenceSummaryHandler(Flounder):
                                                                                                  text=['Q-filter'])),
                      render_mode='css', text_align='right', text_color="green"))
 
-        vline = Span(location=geometry.get_mean_length(), dimension='height', line_color='red', line_width=2)
+        vline = Span(location=self.get_passed_mean_length(), dimension='height', line_color='red', line_width=2)
         p.renderers.extend([vline])
         p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', 
-                              source=ColumnDataSource(data=dict(x=[geometry.get_mean_length()], y=[highest_q], text=['Mean'])),
+                              source=ColumnDataSource(data=dict(x=[self.get_passed_mean_length()], y=[max_q], text=['Mean'])),
                               render_mode='css', text_align='left', text_color="red"))
-        
         p.xaxis.formatter = NumeralTickFormatter(format="0,0")
         p.xaxis.axis_label = 'Read length (nt)'
         p.yaxis.axis_label = 'Phred score (Q)'
