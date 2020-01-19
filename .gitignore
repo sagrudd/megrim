@@ -44,3 +44,7 @@ megrim/plot8.png
 megrim/plot9.png
 
 megrim/__pycache__/
+
+megrim/Tutorials/basic_qc/.ipynb_checkpoints/
+
+megrim/Tutorials/basic_qc/basic_qc_tutorial.html
