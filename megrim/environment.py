@@ -159,14 +159,15 @@ class Flounder:
 def get_megrim_version():
     try:
         distribution = get_distribution("megrim")
-        print("%s(%s)" % (distribution.key, distribution.version))
+        #print("%s(%s)" % (distribution.key, distribution.version))
+        print()
+        return distribution.version
     except:
         logging.warning("megrim package may not be installed")
         txt_chunk = open((pathlib.Path(resource_filename('megrim', 'data')).parent.parent / "setup.py").as_posix()).read()
         txt_lines = txt_chunk.splitlines()
-        print("%s(%s)" % (
-            re.findall('(?<=name=\')[^\']+', list(filter(lambda x: 'name=' in x, txt_lines))[0])[0], 
-            re.findall('(?<=version=\')[^\']+', list(filter(lambda x: 'version=' in x, txt_lines))[0])[0]))
+        version = re.findall('(?<=version=\')[^\']+', list(filter(lambda x: 'version=' in x, txt_lines))[0])[0]
+        return version
 
 
 def tutorial_branding(tutorial=None, legend=None, 

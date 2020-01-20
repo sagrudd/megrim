@@ -379,7 +379,7 @@ class SequenceSummaryHandler(Flounder):
         p.axis.major_label_text_font_size = "5pt"
         p.axis.major_label_standoff = 0
         p.xaxis.major_label_orientation = math.pi / 3
-        p.title.text_font_size = '18pt'
+        #p.title.text_font_size = '18pt'
 
         p.rect(x="column", y="row", width=1, height=1,
                source=layout,
@@ -691,8 +691,6 @@ class SequenceSummaryHandler(Flounder):
                    tools=plot_tools, toolbar_location='below', x_axis_type="log",
                    background_fill_color="lightgrey")
 
-        p.title.text_font_size = '18pt'
-
         p.rect(x="column", y="row", width="width", height=max_q / ybins,
                source=layout,
                fill_color={'field': 'count', 'transform': mapper},
@@ -955,6 +953,8 @@ class SequenceSummaryHandler(Flounder):
 
     @functools.lru_cache()
     def tabulate_barcodes(self, threshold=1):
+        if not self.is_barcoded_dataset():
+             return None
         
         bc_seq_sum = self.seq_sum.loc[self.seq_sum.passes_filtering, ["sequence_length_template", "barcode_arrangement", "mean_qscore_template"]]
         bc_seq_sum["count"]=1

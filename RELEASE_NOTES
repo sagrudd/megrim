@@ -1,0 +1,11 @@
+
+<git-updates>
+  - fix title font size for channel activity
+
+0.3.1 - (20 Jan 20)
+  - update to megrim package version reporting (.__version__)
+  - fix title font size for q_l distribution
+  - tabular barcodes returns Null if non-barcoded collection
+  - dropped monolithic import of everything
+0.3.0 - (19 Jan 20)
+  - features complete for basic_qc
