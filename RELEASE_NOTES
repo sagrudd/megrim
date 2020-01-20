@@ -1,7 +1,7 @@
 
 <git-updates>
   - fix title font size for channel activity
-
+  - fix for temporal data calculation
 0.3.1 - (20 Jan 20)
   - update to megrim package version reporting (.__version__)
   - fix title font size for q_l distribution

@@ -731,6 +731,7 @@ class SequenceSummaryHandler(Flounder):
         
         (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
         t_seq_res = temporal_seq_res.copy(deep=True)
+        t_seq_res = t_seq_res.loc[t_seq_res.batch > 0,:]
         
         plot = figure(title='Plot showing sequence throughput against time', x_axis_label='Time (hours)',
                       y_axis_label='Sequence reads (n)', background_fill_color="lightgrey",
@@ -739,22 +740,22 @@ class SequenceSummaryHandler(Flounder):
         
         if cumulative:
             if include_total:
-                plot.line(boundaries[:-1], np.cumsum(t_seq_res.counter), line_width=2, line_color='black', 
+                plot.line(boundaries[t_seq_res.index-1], np.cumsum(t_seq_res.counter), line_width=2, line_color='black', 
                           legend_label='Total reads')
-            plot.line(boundaries[:-1], np.cumsum(t_seq_res.pass_reads), line_width=2, line_color='#1F78B4',
+            plot.line(boundaries[t_seq_res.index-1], np.cumsum(t_seq_res.pass_reads), line_width=2, line_color='#1F78B4',
                   legend_label='Passed reads')
             if include_failed:
-                plot.line(boundaries[:-1], np.cumsum(t_seq_res.fail_reads), line_width=2, line_color='#A6CEE3', 
+                plot.line(boundaries[t_seq_res.index-1], np.cumsum(t_seq_res.fail_reads), line_width=2, line_color='#A6CEE3', 
                           legend_label='Failed reads')
             plot.legend.location = "top_left"
         else:
             if include_total:
-                plot.line(boundaries[:-1], t_seq_res.counter, line_width=2, line_color='black', 
+                plot.line(boundaries[t_seq_res.index-1], t_seq_res.counter, line_width=2, line_color='black', 
                           legend_label='Total reads')
-            plot.line(boundaries[:-1], t_seq_res.pass_reads, line_width=2, line_color='#1F78B4',
+            plot.line(boundaries[t_seq_res.index-1], t_seq_res.pass_reads, line_width=2, line_color='#1F78B4',
                   legend_label='Passed reads')
             if include_failed:
-                plot.line(boundaries[:-1], t_seq_res.fail_reads, line_width=2, line_color='#A6CEE3', 
+                plot.line(boundaries[t_seq_res.index-1], t_seq_res.fail_reads, line_width=2, line_color='#A6CEE3', 
                           legend_label='Failed reads')
         return self.handle_output(plot, plot_type)
 
@@ -792,7 +793,7 @@ class SequenceSummaryHandler(Flounder):
         t_seq_res = t_seq_res.reindex(pd.Index(pd.Series(boundaries).index, name="hh")).reset_index()
         t_seq_res = t_seq_res.fillna(0)
         # remove 0 val - this is added during feature filling ...
-        t_seq_res = t_seq_res.loc[t_seq_res.batch > 0,:]
+        t_seq_res = t_seq_res.loc[t_seq_res.index > 0,:]
         return (boundaries, t_seq_res.drop("hh", axis=1))
         
 
@@ -813,6 +814,7 @@ class SequenceSummaryHandler(Flounder):
 
         (boundaries, temporal_seq_res) = self.extract_temporal_data(interval_mins)
         t_seq_res = temporal_seq_res.copy(deep=True)
+        t_seq_res = t_seq_res.loc[t_seq_res.batch > 0,:]
         
         # this deep data copy is required because we are scaling the data
         # and this messes with the core cached object ...
@@ -823,12 +825,12 @@ class SequenceSummaryHandler(Flounder):
                       plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
         if cumulative:
             if include_total:
-                plot.line(boundaries[:-1], np.cumsum(t_seq_res.sequence_length_template), line_width=2, line_color='black', 
+                plot.line(boundaries[t_seq_res.index-1], np.cumsum(t_seq_res.sequence_length_template), line_width=2, line_color='black', 
                           legend_label='bases across all reads')
-            plot.line(boundaries[:-1], np.cumsum(t_seq_res.pass_bases), line_width=2, line_color='#1F78B4',
+            plot.line(boundaries[t_seq_res.index-1], np.cumsum(t_seq_res.pass_bases), line_width=2, line_color='#1F78B4',
                   legend_label='bases from passed reads')
             if include_failed:
-                plot.line(boundaries[:-1], np.cumsum(t_seq_res.fail_bases), line_width=2, line_color='#A6CEE3', 
+                plot.line(boundaries[t_seq_res.index-1], np.cumsum(t_seq_res.fail_bases), line_width=2, line_color='#A6CEE3', 
                           legend_label='bases from failed reads')
             for milestone in milestones:
                 (bases, times) = self.get_sequence_base_point(fraction=milestone, interval_mins=interval_mins)
@@ -839,12 +841,12 @@ class SequenceSummaryHandler(Flounder):
             plot.legend.location = "top_left"
         else:
             if include_total:
-                plot.line(boundaries[:-1], t_seq_res.sequence_length_template, line_width=2, line_color='black', 
+                plot.line(boundaries[t_seq_res.index-1], t_seq_res.sequence_length_template, line_width=2, line_color='black', 
                           legend_label='bases across all reads')
-            plot.line(boundaries[:-1], t_seq_res.pass_bases, line_width=2, line_color='#1F78B4',
+            plot.line(boundaries[t_seq_res.index-1], t_seq_res.pass_bases, line_width=2, line_color='#1F78B4',
                   legend_label='bases from passed reads')
             if include_failed:
-                plot.line(boundaries[:-1], t_seq_res.fail_bases, line_width=2, line_color='#A6CEE3', 
+                plot.line(boundaries[t_seq_res.index-1], t_seq_res.fail_bases, line_width=2, line_color='#A6CEE3', 
                           legend_label='bases from failed reads')
         return self.handle_output(plot, plot_type)
 
