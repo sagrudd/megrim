@@ -82,15 +82,13 @@ class BamHandler:
     @functools.lru_cache()
     def get_bam_ranges(self):
         logging.info("Extracting BAM ranges")
-        
         # note that read_bam by default has a specific set of SAM flags
         # this code needs to be updated to allow for selection of +/-, primary
         # secondary etc ... - this method is also independent of pysam//samtools
-        
         return pr.read_bam(self.bam)
 
     def get_bam_coverage(self):
-        logging.info("Extracting BAM coverage")
+        logging.debug("Extracting BAM coverage")
         return self.get_bam_ranges().to_rle(strand=False)
 
     def get_sam_reads(self, chromosome, start, end):

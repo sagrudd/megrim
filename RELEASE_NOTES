@@ -5,6 +5,7 @@
   - removed GenomeGeometry as a way for handling Series length attributes
   - abstraction of length distribution handling
   - added only PASSED reads as test case
+  - bamread as setup dependency
 0.3.1 - (20 Jan 20)
   - update to megrim package version reporting (.__version__)
   - fix title font size for q_l distribution
