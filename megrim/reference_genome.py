@@ -20,18 +20,13 @@ import logging
 flounder = None
 
 
-class ReferenceGenome:
+class ReferenceGenome(Flounder):
 
     def __init__(self, reference_fasta):
+        Flounder.__init__(self)
         self.fasta = FastaFile(filename=reference_fasta)
         self.allowed = []
         self.skipped = []
-        try:
-            globals()['flounder']
-        except KeyError:
-            print("flounder environment not yet available ..")
-            global flounder
-            flounder = Flounder()
 
     def info(self):
         print(self.fasta.is_open())
@@ -79,7 +74,8 @@ class ReferenceGenome:
         print(" ".join(self.skipped))
 
     def get_tiled_genome(self, tile_size=100):
-        return pr.gf.tile_genome(self.get_reference_ranges(), tile_size, tile_last=False)
+        return pr.gf.tile_genome(
+            self.get_reference_ranges(), tile_size, tile_last=False)
 
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
@@ -104,10 +100,12 @@ class ReferenceGenome:
             def chunk(row):
                 return base_data[row.Start: row.End].mean()
 
-            scores = df_data.loc[((df_data['Chromosome'] == chromosome) & (df_data['NumberOverlaps'] > 0)), :].apply(
-                chunk, axis=1)
+            scores = df_data.loc[
+                ((df_data['Chromosome'] == chromosome) & 
+                 (df_data['NumberOverlaps'] > 0)), :].apply(chunk, axis=1)
             df_data.loc[
-                ((df_data['Chromosome'] == chromosome) & (df_data['NumberOverlaps'] > 0)), ('MeanCoverage')] = scores
+                ((df_data['Chromosome'] == chromosome) & 
+                 (df_data['NumberOverlaps'] > 0)), ('MeanCoverage')] = scores
         return pr.PyRanges(df_data)
 
 
@@ -119,15 +117,20 @@ class ReferenceGenome:
         df = rle[ranges].df
         logging.debug("done ...")
         df['VR'] = df['Run'] * df['Value']
-        df = df.groupby(["Chromosome", "Start"]).agg({"Chromosome": "first", "Start": "first", "End": "first", "Run":np.sum, "VR":np.sum})
+        df = df.groupby(["Chromosome", "Start"]).agg(
+            {"Chromosome": "first", "Start": "first", "End": "first", 
+             "Run":np.sum, "VR":np.sum})
         df['MeanCoverage'] = df['VR'] / df['Run']
-        return pr.PyRanges(df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
+        return pr.PyRanges(
+            df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
 
     def deep_dive(self, bam, ranges, target_proximity, window_size=10):
         # implement a function for the data exploration ...
         def deeper_dive(row):
-            tiled = pr.gf.tile_genome(pr.PyRanges(chromosomes=[row.Chromosome], starts=[row.Start], ends=[row.End]),
-                                      window_size, tile_last=False)
+            tiled = pr.gf.tile_genome(
+                pr.PyRanges(
+                    chromosomes=[row.Chromosome], starts=[row.Start], 
+                    ends=[row.End]), window_size, tile_last=False)
             xx = self.get_tiled_mean_coverage(bam, tiled)
 
         # adjust the boundaries of the provided data
@@ -189,6 +192,7 @@ def augment_annotation(bam, ranges):
     tqdm.pandas()
     df_data[['rstart', 'bases_start', 'mean_read_len', 'start_read_len',
              'strand_p', 'strand_n', 'mapq', 'map0', 'readq', 'read0',
-             'nm', 'cigar_m', 'cigar_i', 'cigar_d']] = df_data.progress_apply(extract_annot, axis=1,
-                                                                              result_type='expand')
+             'nm', 'cigar_m', 'cigar_i', 'cigar_d']
+            ] = df_data.progress_apply(
+                extract_annot, axis=1, result_type='expand')
     return pr.PyRanges(df_data)

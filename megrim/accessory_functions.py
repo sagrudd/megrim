@@ -5,7 +5,7 @@ import progressbar
 import unicodedata
 import urllib
 import string
-
+from math import log10
 
 def web_check(url):
     try:

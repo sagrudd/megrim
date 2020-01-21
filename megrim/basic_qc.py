@@ -16,19 +16,16 @@ from math import log10
 import matplotlib as mpl
 from tqdm import tqdm
 from scipy import stats
-from megrim.genome_geometry import GenomeGeometry
 from megrim.environment import Flounder
 from bisect import bisect_left
 from dask import dataframe as dd
 from dask.diagnostics import ProgressBar
 from time import time
 from megrim.infographic_plots import InfographicPlot, InfographicNode
-# from bokeh.io import export_png
-from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, LabelSet, NumeralTickFormatter, Span, \
-    ColumnDataSource, Range1d
+from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, \
+    LabelSet, NumeralTickFormatter, Span, ColumnDataSource, Range1d
 from bokeh.palettes import (Blues9)
 from bokeh.plotting import figure
-import warnings
 import functools
 
 # import palettable.colorbrewer.sequential
@@ -73,11 +70,13 @@ class SequenceSummaryHandler(Flounder):
         blocksize = 64000000
         compression = None
         if (extension == ".bz2"):
-            logging.warning("reading a bzip2 file - this has performance implications")
+            logging.warning(
+                "reading a bzip2 file - this has performance implications")
             blocksize = None
             compression = "bz2"
         elif (extension in [".gzip", ".gz"]):
-            logging.warning("reading a gzip file - this has performance implications")
+            logging.warning(
+                "reading a gzip file - this has performance implications")
             blocksize = None
             compression = "gzip"
         self.seq_sum = dd.read_csv(
@@ -112,7 +111,8 @@ class SequenceSummaryHandler(Flounder):
             self._load_seqsum()
         except ValueError as verr:
             logging.debug("ValueError error: {0}".format(verr))
-            logging.warning("Dask ValueError during import - filtering for duplicate headers")
+            logging.warning(
+                "Dask ValueError during import - filtering duplicate headers")
 
             extension = os.path.splitext(self.target_file)[1].lower()
             compression = None
@@ -122,24 +122,10 @@ class SequenceSummaryHandler(Flounder):
             elif (extension in [".gzip", ".gz"]):
                 compression = "gzip"
             
-            data = dd.read_csv(self.target_file, delimiter="\t", compression=compression, blocksize=None, dtype="object")
+            data = dd.read_csv(self.target_file, delimiter="\t", 
+                               compression=compression, blocksize=None, 
+                               dtype="object")
             data = data[~(data["filename"] == 'filename')].compute()
-            # +--------------------------+--------+----------+
-            # | Column                   | Found  | Expected |
-            # +--------------------------+--------+----------+
-            # | channel                  | object | int64    |
-            # | duration                 | object | float64  |
-            # | mad_template             | object | float64  |
-            # | mean_qscore_template     | object | float64  |
-            # | median_template          | object | float64  |
-            # | num_events               | object | int64    |
-            # | num_events_template      | object | int64    |
-            # | sequence_length_template | object | int64    |
-            # | start_time               | object | float64  |
-            # | strand_score_template    | object | float64  |
-            # | template_duration        | object | float64  |
-            # | template_start           | object | float64  |
-            # +--------------------------+--------+----------+
             type_info = {"channel": "int64",
                          'start_time': "float64",
                          'duration': "float64",
@@ -147,8 +133,9 @@ class SequenceSummaryHandler(Flounder):
                          'sequence_length_template': "int64",
                          'mean_qscore_template': "float64",
                          }
-            # some older versions of albacore used True | recent versions use TRUE
-            data.passes_filtering = data.passes_filtering.isin(["True", "TRUE"])
+            # older versions of albacore used True | recent versions use TRUE
+            data.passes_filtering = data.passes_filtering.isin(
+                ["True", "TRUE"])
             
             for key in type_info.keys():
                 if key in data.columns:
@@ -192,7 +179,9 @@ class SequenceSummaryHandler(Flounder):
 
         pbar = ProgressBar()
         pbar.register()
-        data = dd.read_csv(barcode_file, delimiter="\t", compression=compression, blocksize=blocksize, dtype="object")
+        data = dd.read_csv(barcode_file, delimiter="\t", 
+                           compression=compression, blocksize=blocksize, 
+                           dtype="object")
         data = data.iloc[:,[0,1]].compute()
         pbar.unregister()
         data = data.set_index('read_id')
@@ -234,7 +223,9 @@ class SequenceSummaryHandler(Flounder):
         elif len(fastq_id) == 15:
             fastq_id = fastq_id[2]
         else:
-            logging.warning("ERROR - unable to parse flowcell_id from seq_summary ... "+str(fastq_id))
+            logging.warning(
+                "ERROR - unable to parse flowcell_id from seq_summary ... "+
+                str(fastq_id))
             fastq_id = "undefined"
         logging.debug("flowcell read as [%s]" % fastq_id)
         # print(("_", fastq_id))
@@ -252,7 +243,8 @@ class SequenceSummaryHandler(Flounder):
             DESCRIPTION.
 
         """
-        (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
+        (plot_width, plot_dpi) = self.handle_kwargs(
+            ["plot_width", "plot_dpi"], **kwargs)
         read_count = len(self.seq_sum)
         total_bases = self.seq_sum['sequence_length_template'].sum()
         
@@ -315,26 +307,35 @@ class SequenceSummaryHandler(Flounder):
         return (runtime * scale["hours"]) / scale[units]
 
     def plot_passed_gauge(self, **kwargs):
-        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
+            ["plot_width", "plot_height", "plot_type", "plot_tools"], 
+            **kwargs)
         
         read_count = len(self.seq_sum)
         passed_read_count = self.seq_sum.passes_filtering.sum()
         perc_val = passed_read_count / read_count * 100
 
-        p = figure(plot_width=plot_width, plot_height=plot_height, x_range=(0.25, 1.75), y_range=(0.7, 1.5), tools=plot_tools)
+        p = figure(plot_width=plot_width, plot_height=plot_height, 
+                   x_range=(0.25, 1.75), y_range=(0.7, 1.5), tools=plot_tools)
 
         start_val = 0
         middle_val = (math.pi / 100) * (100 - perc_val)
         end_val = math.pi
 
-        p.annular_wedge(x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
-                        start_angle=middle_val, end_angle=end_val, color="green", alpha=0.6)
+        p.annular_wedge(
+            x=[1], y=[1], inner_radius=0.2, outer_radius=0.5, 
+            start_angle=middle_val, end_angle=end_val, color="green", 
+            alpha=0.6)
 
-        p.annular_wedge(x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
-                        start_angle=start_val, end_angle=middle_val, color="orange", alpha=0.6)
+        p.annular_wedge(
+            x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
+            start_angle=start_val, end_angle=middle_val, color="orange", 
+            alpha=0.6)
 
-        label = Label(x=1, y=1, text="{:.1f}%".format(perc_val), x_units='data', y_units='data',
-                      text_align='center', text_font_style='bold', text_font_size='1.5em')
+        label = Label(
+            x=1, y=1, text="{:.1f}%".format(perc_val), x_units='data', 
+            y_units='data', text_align='center', text_font_style='bold', 
+            text_font_size='1.5em')
         legend = Label(x=1, y=0.9,
                        text="Percentage of reads passing QC filter",
                        x_units='data', y_units='data',
@@ -348,7 +349,8 @@ class SequenceSummaryHandler(Flounder):
 
 
     def plot_channel_activity(self, **kwargs):
-        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
+            ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
         # layout = channel_map.get_platform_map()
@@ -360,17 +362,19 @@ class SequenceSummaryHandler(Flounder):
 
         logging.debug(layout)
 
-        # colors = ["#75968f", "#a5bab7", "#c9d9d3", "#e2e2e2", "#dfccce", "#ddb7b1", "#cc7878", "#933b41", "#550b1d"]
         colors = Blues9[::-1]
-        mapper = LinearColorMapper(palette=colors, low=layout['count'].min(), high=layout['count'].max())
+        mapper = LinearColorMapper(
+            palette=colors, low=layout['count'].min(), 
+            high=layout['count'].max())
 
         rows = list(layout.row.unique())
         columns = list(layout.column.unique())
 
-        p = figure(title="channel activity plot",
-                   x_range=columns, y_range=rows,
-                   x_axis_location="above", plot_width=plot_width, plot_height=plot_height,
-                   tools=plot_tools, toolbar_location='below')
+        p = figure(
+            title="channel activity plot", x_range=columns, y_range=rows,
+            x_axis_location="above", plot_width=plot_width, 
+            plot_height=plot_height, tools=plot_tools, 
+            toolbar_location='below')
 
         p.axis.visible = False
         p.grid.grid_line_color = None
@@ -386,87 +390,163 @@ class SequenceSummaryHandler(Flounder):
                fill_color={'field': 'count', 'transform': mapper},
                line_color=None)
 
-        color_bar = ColorBar(color_mapper=mapper, major_label_text_font_size="10pt",
-                             ticker=BasicTicker(desired_num_ticks=len(colors)),
-                             # formatter=PrintfTickFormatter(format="%d%%"),
-                             title="#reads",
-                             label_standoff=6, border_line_color=None, location=(0, 0))
+        color_bar = ColorBar(
+            color_mapper=mapper, major_label_text_font_size="10pt",
+            ticker=BasicTicker(desired_num_ticks=len(colors)),
+            title="#reads", label_standoff=6, border_line_color=None, 
+            location=(0, 0))
         p.add_layout(color_bar, 'right')
         return self.handle_output(p, plot_type)
 
+
+    @functools.lru_cache()
+    def get_passed_reads(self, field=None, passed=True):
+        if passed is None:
+            return self.seq_sum
+        else:
+            if field is None:
+                return self.seq_sum.loc[
+                    self.seq_sum['passes_filtering']==passed, ]
+            else:
+                return self.seq_sum.loc[
+                    self.seq_sum['passes_filtering']==passed, field]
+
+
+    @functools.lru_cache()
+    def get_length_character(self, key, field="sequence_length_template", 
+                             passed=None):
+        """
+        This is an accessory method to help get a sequence length threshold
+        based on parameters that may be more interesting thanj just the
+        canonical longest read or read mean length
+
+        Parameters
+        ----------
+        key : TYPE
+            The feature to report - this can include keywords (max), (mean),
+            (qmean), (N<float>), (n<float>) or (Q<float). 
+        field : TYPE, optional
+            DESCRIPTION. The default is "sequence_length_template".
+        passed : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        int
+            a sequence length that may be used for downstream processing and
+            visualisation.
+
+        """
+        if isinstance(key, int):
+            return key
+        elif key is None:
+            return self.get_passed_reads(field=field, passed=passed).max()
+        elif key == "max":
+            return self.get_passed_reads(field=field, passed=passed).max()
+        elif key == "mean":
+            return self.get_passed_reads(field=field, passed=passed).mean()
+        elif key == "min":
+            return self.get_passed_reads(field=field, passed=passed).min()
+        elif key == "qmean":
+            series = self.get_passed_reads(field=field, passed=passed)
+            return -10 * log10((10 ** (series / -10)).mean())
+        # handle N.values
+        elif key[0]=="N":
+            val = float(key[1:])
+            ldata = self.get_passed_reads(
+                field=field, passed=passed).sort_values(
+                    ascending=False).reset_index(drop=True)
+            n_sum = int(ldata.sum())
+            n_targ = (n_sum / 100) * val
+            accumulated = ldata.cumsum()
+            aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
+            return ldata[aindex]
+        elif key[0]=="n":
+            val = int(key[1:])
+            ldata = self.get_passed_reads(
+                field=field, passed=passed).sort_values(
+                    ascending=False).reset_index(drop=True)
+            return ldata[val]
+        elif key[0]=="Q":
+            val = float(key[1:])
+            return self.get_passed_reads(
+                field=field, passed=passed).quantile(val)
+        logging.error("{} is not an understood transformation")
+        return None
+
+
     def library_characteristics_infographic(self, **kwargs):
 
-        (plot_width, plot_dpi) = self.handle_kwargs(["plot_width", "plot_dpi"], **kwargs)
+        (plot_width, plot_dpi) = self.handle_kwargs(
+            ["plot_width", "plot_dpi"], **kwargs)
         
-        geometry = GenomeGeometry(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['sequence_length_template']))
-        longest_read = geometry.get_longest_read()
-        logging.debug("longest_read == %s" % (longest_read))
-        mean_read_length = geometry.get_mean_length()
-        logging.debug("mean_read_length == %s" % (mean_read_length))
-        read_n50_length = geometry.get_n_value(n=50)
-        logging.debug("read_n50_length == %s" % (read_n50_length))
-        passed_mean_q = geometry.calculate_mean_quality(
-            pd.Series(self.seq_sum[self.seq_sum['passes_filtering']]['mean_qscore_template']))
-        logging.debug("passed_mean_q == %s" % (passed_mean_q))
-        failed_mean_q = geometry.calculate_mean_quality(
-            pd.Series(self.seq_sum[~self.seq_sum['passes_filtering']]['mean_qscore_template']))
-        logging.debug("failed_mean_q == %s" % (failed_mean_q))
+        longest_read = self.get_length_character(key="max", passed=True)
+        mean_read_length = self.get_length_character(key="mean", passed=True)
+        read_n50_length = self.get_length_character(key="N50", passed=True)
 
-        # df$info <- c(passedMeanLength, N50, passedMeanQ, failedMeanQ, prettyNum(max(passedSeqs$sequence_length_template), big.mark=","))
-        # df$key <- c("Mean Read Length (nt)","N50","Mean Read Quality (QV)","Mean Failed QV","Longest Read")
-        # df$icon <- fontawesome(c("fa-bar-chart", "fa-play", "fa-area-chart", "fa-bug", "fa-sort"))
+        passed_mean_q = self.get_length_character(
+            key="qmean", passed=True, field="mean_qscore_template")
+        failed_mean_q = self.get_length_character(
+            key="qmean", passed=False, field="mean_qscore_template")
 
-        mean_read_length_node = InfographicNode(legend="Mean Read Length",
-                                                value="{:.2f}".format(mean_read_length),
-                                                graphic='map-signs')
-        read_n50_length_node = InfographicNode(legend="N50",
-                                               value="{:,}".format(read_n50_length),
-                                               graphic='bullseye')
-        passed_mean_q_node = InfographicNode(legend="Mean Read Quality",
-                                             value="{:.2f}".format(passed_mean_q),
-                                             graphic='award')
-        failed_mean_q_node = InfographicNode(legend="Mean Failed QV",
-                                             value="{:.2f}".format(failed_mean_q),
-                                             graphic='bug')
-        longest_read_node = InfographicNode(legend="Longest Read",
-                                            value="{:,}".format(longest_read),
-                                            graphic='sort')
-        infographic_data = [mean_read_length_node, read_n50_length_node,
-                            passed_mean_q_node, failed_mean_q_node,
+        mean_read_length_node = InfographicNode(
+            legend="Mean Read Length", 
+            value="{:.2f}".format(mean_read_length),
+            graphic='map-signs')
+        read_n50_length_node = InfographicNode(
+            legend="N50",
+            value="{:,}".format(read_n50_length),
+            graphic='bullseye')
+        passed_mean_q_node = InfographicNode(
+            legend="Mean Read Quality",
+            value="{:.2f}".format(passed_mean_q),
+            graphic='award')
+        failed_mean_q_node = InfographicNode(
+            legend="Mean Failed QV",
+            value="{:.2f}".format(failed_mean_q),
+            graphic='bug')
+        longest_read_node = InfographicNode(
+            legend="Longest Read",
+            value="{:,}".format(longest_read),
+            graphic='sort')
+        infographic_data = [mean_read_length_node, 
+                            read_n50_length_node,
+                            passed_mean_q_node, 
+                            failed_mean_q_node,
                             longest_read_node]
         ip = InfographicPlot(infographic_data, rows=1, columns=5)
         return ip.plot_infographic(plot_width, plot_dpi)
 
 
-    def calculate_n_val(self, data, n=50):
-        ldata = data.sort_values(ascending=False).reset_index(drop=True)
-        n_sum = int(ldata.sum())
-        n_targ = n_sum * (n / 100)
-        accumulated = ldata.cumsum()
-        aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
-        N = ldata[aindex]
-        return N
-
 
     @functools.lru_cache()
     def extract_size_stratified_data(self, longest_read, bins):
         
-        l_seq_sum = self.seq_sum[["sequence_length_template", "passes_filtering"]]
+        l_seq_sum = self.seq_sum[[
+            "sequence_length_template", "passes_filtering"]]
         
-        if longest_read is None:
-            longest_read = l_seq_sum.sequence_length_template.max()
+        longest_read = self.get_length_character(key=longest_read, passed=True)
+        logging.debug("longest_read == {}".format(longest_read))
+        
         longest_read = int(longest_read + 1)
-        boundaries = np.linspace(0, longest_read, num=bins, endpoint=True, retstep=False)
-        assignments = np.digitize(l_seq_sum.sequence_length_template, boundaries)
+        boundaries = np.linspace(
+            0, longest_read, num=bins, endpoint=True, retstep=False)
+        assignments = np.digitize(
+            l_seq_sum.sequence_length_template, boundaries)
         
-        l_seq_sum = l_seq_sum.reindex(columns=l_seq_sum.columns.tolist()+["batch", "pass_bases", "fail_bases", "pass_reads", "fail_reads"])
+        l_seq_sum = l_seq_sum.reindex(
+            columns=l_seq_sum.columns.tolist()+
+            ["batch", "pass_bases", "fail_bases", "pass_reads", "fail_reads"])
         
         l_seq_sum.iloc[:,[2]] = assignments
         l_seq_sum.iloc[:,[3,4,5,6]] = 0
         l_seq_sum.loc[~l_seq_sum.passes_filtering, ["fail_reads"]] = 1
         l_seq_sum.loc[l_seq_sum.passes_filtering, ["pass_reads"]] = 1
-        l_seq_sum.loc[l_seq_sum.passes_filtering, ["pass_bases"]] = l_seq_sum.loc[l_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
+        l_seq_sum.loc[
+            l_seq_sum.passes_filtering, ["pass_bases"]
+            ] = l_seq_sum.loc[
+                l_seq_sum.passes_filtering, ["sequence_length_template"]
+                ].iloc[:,0]
         l_seq_sum.loc[~l_seq_sum.passes_filtering, ["fail_bases"]] = l_seq_sum.loc[~l_seq_sum.passes_filtering, ["sequence_length_template"]].iloc[:,0]
         
         l_seq_res = l_seq_sum.groupby(["batch"]).agg(
@@ -484,14 +564,14 @@ class SequenceSummaryHandler(Flounder):
         return (longest_read,
                 boundaries, 
                 l_seq_res.fillna(0), 
-                l_seq_sum.sequence_length_template.mean(), 
-                self.calculate_n_val(l_seq_sum.sequence_length_template, 50))
+                self.get_length_character(key="mean", passed=True), 
+                self.get_length_character(key="N50", passed=True))
 
 
     def plot_sequence_length(self, normalised=True,
                              include_failed=True, bins=30,
                              annotate_mean=True, annotate_n50=True, 
-                             longest_read=None, **kwargs):
+                             longest_read="Q0.995", **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         longest_read, boundaries, l_seq_res, mean_val, N = self.extract_size_stratified_data(longest_read=longest_read, bins=bins)
@@ -557,12 +637,6 @@ class SequenceSummaryHandler(Flounder):
         p.grid.grid_line_color = "white"
 
         return self.handle_output(p, plot_type)   
-    
-    
-    @functools.lru_cache()
-    def get_passed_mean_length(self):
-        return int(self.seq_sum.loc[
-            self.seq_sum.passes_filtering, ["sequence_length_template"]].mean())
     
     
     @functools.lru_cache()
@@ -633,20 +707,26 @@ class SequenceSummaryHandler(Flounder):
         return self.handle_output(p, plot_type)
     
 
-    def plot_q_l_density(self, xbins=100, ybins=100, longest_read=None,
-                         min_q=None, max_q=None, plot_depth_threshold=100, **kwargs):
+    def plot_q_l_density(self, xbins=100, ybins=100, longest_read="Q0.99",
+                         min_q="min", max_q="Q0.99", plot_depth_threshold=1, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
 
         if min_q is None:
             min_q = self.seq_sum.mean_qscore_template.min()
         if max_q is None:
             max_q = self.seq_sum.mean_qscore_template.max()
-        if longest_read is None:
-            longest_read = self.seq_sum.sequence_length_template.max()
+            
+        min_q = self.get_length_character(
+            key=min_q, passed=True, field="mean_qscore_template")
+        max_q = self.get_length_character(
+            key=max_q, passed=True, field="mean_qscore_template")
+        
+        longest_read = self.get_length_character(key="max", passed=True)
+        shortest_read = self.get_length_character(key="min", passed=True)
 
         q_boundaries = np.linspace(min_q, max_q, num=ybins, endpoint=True, retstep=False)
         # l_boundaries = np.linspace(np.log10(100), np.log10(longest_read), num=xbins, endpoint=True)
-        l_boundaries = np.logspace(np.log10(100), np.log10(longest_read), num=xbins)
+        l_boundaries = np.logspace(np.log10(shortest_read), np.log10(longest_read), num=xbins)
 
         binned2d = stats.binned_statistic_2d(
             self.seq_sum['sequence_length_template'],
@@ -712,10 +792,10 @@ class SequenceSummaryHandler(Flounder):
                                                                                                  text=['Q-filter'])),
                      render_mode='css', text_align='right', text_color="green"))
 
-        vline = Span(location=self.get_passed_mean_length(), dimension='height', line_color='red', line_width=2)
+        vline = Span(location=self.get_length_character(key="mean", passed=True), dimension='height', line_color='red', line_width=2)
         p.renderers.extend([vline])
         p.add_layout(LabelSet(x='x', y='y', text='text', level='glyph', 
-                              source=ColumnDataSource(data=dict(x=[self.get_passed_mean_length()], y=[max_q], text=['Mean'])),
+                              source=ColumnDataSource(data=dict(x=[self.get_length_character(key="mean", passed=True)], y=[max_q], text=['Mean'])),
                               render_mode='css', text_align='left', text_color="red"))
         p.xaxis.formatter = NumeralTickFormatter(format="0,0")
         p.xaxis.axis_label = 'Read length (nt)'
@@ -933,17 +1013,22 @@ class SequenceSummaryHandler(Flounder):
         classified = barcodes.iloc[bi[bi != "unclassified"].index.values]
         unclassified = barcodes.iloc[bi[bi == "unclassified"].index.values]
 
-        bc_fraction = InfographicNode(legend="Reads with barcode",
-                                        value="{:.2f} %".format(classified['count'].sum() / (classified['count'].sum() + unclassified['count'].sum()) * 100),
-                                        graphic='chart-pie')
-
-        bc_bc_count = InfographicNode(legend="Barcoded libraries",
-                                         value="{}".format(len(classified.index)),
-                                         graphic='barcode')
-
-        bc_variance = InfographicNode(legend="Barcode variance",
-                                     value=">{}\n{}<".format(classified["count"].min(),classified["count"].max()),
-                                     graphic='sort-numeric-down')
+        bc_fraction = InfographicNode(
+            legend="Reads with barcode",
+            value="{:.2f} %".format(
+                classified['count'].sum() / 
+                (classified['count'].sum() + 
+                 unclassified['count'].sum()) * 100),
+            graphic='chart-pie')
+        bc_bc_count = InfographicNode(
+            legend="Barcoded libraries",
+            value="{}".format(len(classified.index)), 
+            graphic='barcode')
+        bc_variance = InfographicNode(
+            legend="Barcode variance",
+            value=">{}\n{}<".format(
+                classified["count"].min(),classified["count"].max()),
+            graphic='sort-numeric-down')
         infographic_data = [bc_fraction, bc_bc_count, bc_variance]
         ip = InfographicPlot(infographic_data, rows=1, columns=3)
         return ip.plot_infographic(plot_width, plot_dpi)
@@ -958,19 +1043,26 @@ class SequenceSummaryHandler(Flounder):
         if not self.is_barcoded_dataset():
              return None
         
-        bc_seq_sum = self.seq_sum.loc[self.seq_sum.passes_filtering, ["sequence_length_template", "barcode_arrangement", "mean_qscore_template"]]
+        bc_seq_sum = self.seq_sum.loc[
+            self.seq_sum.passes_filtering, [
+                "sequence_length_template", "barcode_arrangement", 
+                "mean_qscore_template"]]
         bc_seq_sum["count"]=1
         total_reads = np.sum(bc_seq_sum["count"])
         
         def get_perc(x):
             return x.sum()/total_reads * 100
             
-        bc_res = bc_seq_sum.groupby("barcode_arrangement").agg({"count": [np.sum, get_perc],
-                                                       "mean_qscore_template": [self.calculate_mean_quality], 
-                                                       "sequence_length_template":[np.sum, np.min, np.max, np.mean, self.calculate_n_val]})
+        bc_res = bc_seq_sum.groupby(
+            "barcode_arrangement"
+            ).agg({"count": [np.sum, get_perc],
+                   "mean_qscore_template": [self.calculate_mean_quality], 
+                   "sequence_length_template":[np.sum, np.min, np.max, 
+                                               np.mean, self.calculate_n_val]})
         bc_res.columns = bc_res.columns.droplevel()
         bc_res.index.name = ''
-        bc_res.columns = ["count","%","mean_q","Mbases","min","max","mean","N50"]
+        bc_res.columns = ["count", "%", "mean_q", "Mbases", "min", "max", 
+                          "mean", "N50"]
         
         bc_res["mean_q"] = bc_res["mean_q"].round(2)
         bc_res["Mbases"] = bc_res["Mbases"].round(2)
@@ -982,7 +1074,11 @@ class SequenceSummaryHandler(Flounder):
         return bc_res
 
     def plot_barcodes(self, threshold=1, **kwargs):
-        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        (
+            plot_width, plot_height, plot_type, plot_tools
+         ) = self.handle_kwargs(
+             ["plot_width", "plot_height", "plot_type", "plot_tools"], 
+             **kwargs)
         
         if not self.is_barcoded_dataset():
             return None
@@ -1011,11 +1107,13 @@ class SequenceSummaryHandler(Flounder):
              return None
         barcodes = self.tabulate_barcodes()
         if barcode_id not in barcodes.index:
-            logging.warning("requested barcode not present in barcode file ...")
+            logging.warning("requested barcode not present in barcode file")
             return None
         
         subset = self.seq_sum[self.seq_sum["barcode_arrangement"]==barcode_id]
-        sub_ssh = SequenceSummaryHandler(target_data=subset, fcid="{}\n{}".format(self.get_flowcell_id(), barcode_id))
+        sub_ssh = SequenceSummaryHandler(
+            target_data=subset, fcid="{}\n{}".format(
+                self.get_flowcell_id(), barcode_id))
         self.sync(sub_ssh)
         return sub_ssh
 
@@ -1145,7 +1243,8 @@ class SequencingSummaryGetChannelMap:
         def chunk(i):
             return np.arange(1, 251).reshape(25, 10) + i
 
-        layout = np.hstack(np.stack(pd.Series(np.arange(0, 2751, 250)).apply(chunk)))
+        layout = np.hstack(
+            np.stack(pd.Series(np.arange(0, 2751, 250)).apply(chunk)))
         coords_df = pd.DataFrame(layout).reset_index().melt(id_vars='index')
         coords_df.columns = ['row', 'column', 'channel']
         return coords_df
@@ -1170,12 +1269,15 @@ class SequencingSummaryGetChannelMap:
     def get_platform_density(self):
         platform_map = self.get_platform_map()
         # collapse the channel data to get count information ...
-        channel_counts = self.seq_sum.groupby('channel')['channel'].agg(['count'])
+        channel_counts = self.seq_sum.groupby(
+            'channel')['channel'].agg(['count'])
         # merge the count data with the map coordinates
-        channel_coords_counts = pd.merge(platform_map, channel_counts, on='channel', how='left')
+        channel_coords_counts = pd.merge(
+            platform_map, channel_counts, on='channel', how='left')
         if self.get_platform() == "MinION":
             logging.info("rotating MinION data")
-            channel_coords_counts = channel_coords_counts.rename(columns={"row": "column", "column": "row"})
+            channel_coords_counts = channel_coords_counts.rename(
+                columns={"row": "column", "column": "row"})
         return channel_coords_counts
     
     

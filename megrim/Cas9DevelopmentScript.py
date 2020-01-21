@@ -8,16 +8,18 @@ Created on Thu Jan  2 16:40:04 2020
 
 import sys
 from IPython.display import Image
-from megrim.environment import get_branding_logo, Flounder
+from megrim.environment import tutorial_branding, Flounder
 from megrim.genome_geometry import BamHandler, BedHandler
 from megrim.reference_genome import ReferenceGenome, augment_annotation
 from importlib import reload
 import logging
 reload(logging)
-logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.DEBUG, datefmt='%I:%M:%S')
+logging.basicConfig(
+    format='%(asctime)s %(levelname)s:%(message)s',  
+    level=logging.DEBUG, datefmt='%I:%M:%S')
 
 
-Image(get_branding_logo())
+tutorial_branding("Cas9", "Oxford Nanopore Tutorial: Cas9")
 
 
 # create an instance of flounder for path handling
@@ -56,7 +58,8 @@ print(tiled_coverage_means)
 
 # prepare coverage update for the on_target ranges
 on_target_universe = ref.get_tiled_mean_coverage2(bam, ranges=on_target)
-target_proximal_universe = ref.get_tiled_mean_coverage2(bam, ranges=target_proximal)
+target_proximal_universe = ref.get_tiled_mean_coverage2(
+    bam, ranges=target_proximal)
 print(target_proximal_universe.MeanCoverage)
 
 # look for the off-target regions of the genome
