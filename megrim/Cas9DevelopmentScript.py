@@ -23,11 +23,19 @@ logging.basicConfig(
 
 tutorial_branding("Cas9", "Oxford Nanopore Tutorial: Cas9")
 
+target_enrichment = TargetEnrichment(reference_genome="/Users/srudd/Desktop/Human_genome.fasta",
+         bed_file="/Users/srudd/Desktop/enrichment_targets.bed",
+         bam_file="/Users/srudd/Desktop/cas9_FAK76554.bam"
+         )
 
+target_enrichment.set_plot_type("screenshot")
 
+target_enrichment.get_background_annotation()
 
 
 sys.exit(0)
+
+
 target_proximity = 5000
 
 # define a reference genome - this requires a fasta file

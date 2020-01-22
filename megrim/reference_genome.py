@@ -181,10 +181,12 @@ def augment_annotation(bam, ranges):
                    cigar_i, cigar_d
     
         df_data = ranges.df
-        #tqdm.pandas()
+        
+        tqdm.pandas()
+        
         df_data[['rstart', 'bases_start', 'mean_read_len', 'start_read_len',
                  'strand_p', 'strand_n', 'mapq', 'map0', 'readq', 'read0',
                  'nm', 'cigar_m', 'cigar_i', 'cigar_d']
-                ] = df_data.swifter.apply(
+                ] = df_data.swifter.progress_bar(enable=True, desc=None).apply(
                     extract_annot, axis=1, result_type='expand')
         return pr.PyRanges(df_data)

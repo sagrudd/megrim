@@ -6,6 +6,8 @@
   - abstraction of length distribution handling
   - added only PASSED reads as test case
   - bamread as setup dependency
+  - target_enrichment module
+  - read_bam bam_filter updated to 3844 for R tutorial (cas9) parity
 0.3.1 - (20 Jan 20)
   - update to megrim package version reporting (.__version__)
   - fix title font size for q_l distribution

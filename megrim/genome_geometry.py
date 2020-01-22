@@ -80,12 +80,12 @@ class BamHandler:
         self.samfile = pysam.AlignmentFile(bam, "rb")
 
     @functools.lru_cache()
-    def get_bam_ranges(self):
+    def get_bam_ranges(self, filter_flag=3844):
         logging.info("Extracting BAM ranges")
         # note that read_bam by default has a specific set of SAM flags
         # this code needs to be updated to allow for selection of +/-, primary
         # secondary etc ... - this method is also independent of pysam//samtools
-        return pr.read_bam(self.bam)
+        return pr.read_bam(self.bam, filter_flag=3844)
 
     def get_bam_coverage(self):
         logging.debug("Extracting BAM coverage")
@@ -106,26 +106,29 @@ class BamHandler:
         cigar_d = []
         nm = []
         for read in annot:
-            start.append(read.reference_start)
-            reference_length.append(read.reference_length)
-            mapping_quality.append(read.mapping_quality)
-            if read.is_reverse:
-                strand.append("-")
-            else:
-                strand.append("+")
-            mapped_read_q.append(-10 * log10((10 ** (pd.Series(read.query_alignment_qualities) / -10)).mean()))
-            cigar_stats = read.get_cigar_stats()
-            cigar_m.append(cigar_stats[0][0])
-            cigar_i.append(cigar_stats[0][1])
-            cigar_d.append(cigar_stats[0][2])
-            nm.append(cigar_stats[0][10])
-        annot = {'reference_start': start,
-                 'reference_length': reference_length,
-                 'mapping_quality': mapping_quality,
-                 'strand': strand,
-                 'mapped_read_q': mapped_read_q,
-                 'cigar_m': cigar_m,
-                 'cigar_i': cigar_i,
-                 'cigar_d': cigar_d,
-                 'nm': nm}
+            if not any([read.is_secondary, read.is_supplementary, 
+                        read.is_qcfail, read.is_duplicate]):
+                start.append(read.reference_start)
+                reference_length.append(read.reference_length)
+                mapping_quality.append(read.mapping_quality)
+                if read.is_reverse:
+                    strand.append("-")
+                else:
+                    strand.append("+")
+                mapped_read_q.append(-10 * log10((10 ** (pd.Series(
+                    read.query_alignment_qualities) / -10)).mean()))
+                cigar_stats = read.get_cigar_stats()
+                cigar_m.append(cigar_stats[0][0])
+                cigar_i.append(cigar_stats[0][1])
+                cigar_d.append(cigar_stats[0][2])
+                nm.append(cigar_stats[0][10])
+            annot = {'reference_start': start,
+                     'reference_length': reference_length,
+                     'mapping_quality': mapping_quality,
+                     'strand': strand,
+                     'mapped_read_q': mapped_read_q,
+                     'cigar_m': cigar_m,
+                     'cigar_i': cigar_i,
+                     'cigar_d': cigar_d,
+                     'nm': nm}
         return pd.DataFrame.from_dict(annot)
