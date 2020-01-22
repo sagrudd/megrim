@@ -10,7 +10,7 @@ from pysam import FastaFile
 import pyranges as pr
 import numpy as np
 from megrim.environment import Flounder
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 from math import log10
 import pandas as pd
 import logging
@@ -57,6 +57,13 @@ class ReferenceGenome(Flounder):
         for chromosome in chromosomes:
             lengths.append(self.fasta.get_reference_length(chromosome))
         return lengths
+    
+    def get_genome_size(self):
+        size = 0
+        for chromosome in self.get_chromosomes():
+            size += self.fasta.get_reference_length(chromosome)
+        return size
+        
 
     def get_reference_ranges(self):
         chromosomes = self.get_chromosomes()
@@ -83,15 +90,13 @@ class ReferenceGenome(Flounder):
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
 
-    def get_tiled_mean_coverage(self,bam,ranges=None, tile_size=100, silent=False):
+    def get_tiled_mean_coverage(self,bam,ranges=None, tile_size=100):
         if ranges is None:
             ranges = self.get_tiled_genome(tile_size)
         rle = bam.get_bam_coverage()
-        if not silent:
-            logging.debug("subsetting genomic RLE with ranges")
+
         df = rle[ranges].df
-        if not silent:
-            logging.debug("summarising mean coverage per window")
+
         df['VR'] = df['Run'] * df['Value']
         df = df.groupby(["Chromosome", "Start"]).agg(
             {"Chromosome": "first", "Start": "first", "End": "first", 
@@ -100,27 +105,23 @@ class ReferenceGenome(Flounder):
         return pr.PyRanges(
             df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
 
-    def deep_dive(self, bam, ranges, target_proximity=5000, window_size=10):
-        # adjust the boundaries of the provided data
-        deep_dive_data = ranges
-        deep_dive_data.Start = deep_dive_data.Start - target_proximity
-        deep_dive_data.End = deep_dive_data.Start + target_proximity
-        deep_dive_data = deep_dive_data.df
+    def deep_dive(self, bam, arange, target, target_proximity=5000, window_size=10):
         
-        deep_data = None
-        tqdm.pandas()
-        for i in tqdm(deep_dive_data.index.tolist()):
-            row = deep_dive_data.iloc[i,]
-            tiled = pr.gf.tile_genome(
-                pr.PyRanges(
-                    chromosomes=[row.Chromosome], starts=[row.Start], 
-                    ends=[row.End]), window_size, tile_last=False)
-            counted = self.get_tiled_mean_coverage(bam, tiled, silent=True).df
-            if row.index.isin(["Name"]).any():
-                counted["Name"]=row.Name
-            
-            deep_data = pd.concat([deep_data, counted]).reset_index(drop=True)
-        return pr.PyRanges(deep_data)
+        targets = arange.df
+        targets = targets.loc[targets.Name == target,]
+        
+        chromos = str(targets.Chromosome.tolist()[0])
+        starts = int(targets.Start.tolist()[0]) - target_proximity
+        ends = int(targets.End.tolist()[0]) + target_proximity
+        
+        myrange = pr.PyRanges(chromosomes=[chromos], 
+                               starts=[starts], 
+                               ends=[ends])
+
+        focused_range = self.get_tiled_mean_coverage(
+            bam=bam, ranges=pr.gf.tile_genome(
+                myrange, window_size, tile_last=False))
+        return focused_range
 
 
 
@@ -181,8 +182,6 @@ def augment_annotation(bam, ranges):
                    cigar_i, cigar_d
     
         df_data = ranges.df
-        
-        tqdm.pandas()
         
         df_data[['rstart', 'bases_start', 'mean_read_len', 'start_read_len',
                  'strand_p', 'strand_n', 'mapq', 'map0', 'readq', 'read0',

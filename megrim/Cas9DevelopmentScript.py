@@ -6,6 +6,11 @@ Created on Thu Jan  2 16:40:04 2020
 @author: srudd
 """
 
+
+from tqdm import tqdm
+import swifter
+from time import sleep
+
 import sys
 from IPython.display import Image
 from megrim.environment import tutorial_branding, Flounder
@@ -27,11 +32,23 @@ target_enrichment = TargetEnrichment(reference_genome="/Users/srudd/Desktop/Huma
          bed_file="/Users/srudd/Desktop/enrichment_targets.bed",
          bam_file="/Users/srudd/Desktop/cas9_FAK76554.bam"
          )
-
 target_enrichment.set_plot_type("screenshot")
 
-target_enrichment.get_background_annotation()
 
+target_enrichment.get_mapping_stats()
+target_enrichment.set_plot_type("screenshot")
+
+#target_enrichment.get_background_annotation()
+
+
+# ranges = target_enrichment.get_on_target()
+# print(ranges)
+
+# def doit(x):
+#     sleep(0.1)
+#     return 1
+
+# ranges.df.swifter.progress_bar(True).apply(doit, axis=1)
 
 sys.exit(0)
 

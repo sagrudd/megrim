@@ -19,4 +19,4 @@ dependencies:
   - anaconda:spyder
   - pip
   - pip:
-    --editable=git+https://github.com/sagrudd/megrim.git#egg=megrim
+    - "--editable=git+https://github.com/sagrudd/megrim.git#egg=megrim"
