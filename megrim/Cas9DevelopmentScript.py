@@ -12,6 +12,7 @@ from megrim.environment import tutorial_branding, Flounder
 from megrim.genome_geometry import BamHandler, BedHandler
 from megrim.reference_genome import ReferenceGenome, augment_annotation
 from megrim.reproducible_research import SessionInfo
+from megrim.target_enrichment import TargetEnrichment
 from importlib import reload
 import logging
 reload(logging)
@@ -22,6 +23,11 @@ logging.basicConfig(
 
 tutorial_branding("Cas9", "Oxford Nanopore Tutorial: Cas9")
 
+
+
+
+
+sys.exit(0)
 target_proximity = 5000
 
 # define a reference genome - this requires a fasta file
