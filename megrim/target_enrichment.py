@@ -313,6 +313,43 @@ class TargetEnrichment(Flounder):
         plot.renderers.extend([start_line, end_line, bg_line])
         plot.xaxis.formatter = NumeralTickFormatter(format="0,0")
         return self.handle_output(plot, plot_type)
+    
+    def get_ideogram(self, **kwargs):
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
+        logging.info("preparing ideogram")
+        
+        chromosomes = self.ref.get_chromosomes()
+        lengths = self.ref.get_chromosome_lengths(chromosomes)
+        
+        ideo_data = pd.DataFrame({"Chromosome": chromosomes,
+                                  "Size": lengths}).reset_index(drop=True)
+        # print(ideo_data)
+        
+        plot = figure(title='Ideogram showing location of off-target sequences', 
+                      x_axis_label='Chromosome position (nt)',
+                      y_axis_label='Chromosome', background_fill_color="lightgrey",
+                      plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
+
+        plot.hbar(y=ideo_data.index.tolist(), right=ideo_data.Size, left=0, height=0.7, fill_color="#A6CEE3", line_color="#1F78B4")
+        
+        # and overlay some coordinate data
+        off_t = self.get_off_target().df
+        def getit(i):
+            return ideo_data.loc[ideo_data["Chromosome"]==i,].index.tolist()[0]
+        
+        off_t['row_id'] = off_t['Chromosome'].apply(getit)
+        
+        plot.hbar(y=off_t['row_id'], left=off_t['Start'], right=off_t['End'], height=0.7, fill_color="red", line_color="red")
+        
+        plot.yaxis.ticker = ideo_data.index.tolist()
+        tick_dict = {}
+        for i in ideo_data.index.tolist():
+            tick_dict[i]=ideo_data.iloc[i].Chromosome
+        plot.yaxis.major_label_overrides = tick_dict
+        #return ideo_data
+        plot.xaxis.formatter = NumeralTickFormatter(format="0,0")
+        return self.handle_output(plot, plot_type)
+        # return ideo_data
     
-    
+ 
