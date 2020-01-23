@@ -25,7 +25,7 @@ class TargetEnrichment(Flounder):
 
     def __init__(self, reference_genome=None, bed_file=None, bam_file=None,
                  target_proximity=5000, background_threshold=20, 
-                 tile_size=100):
+                 tile_size=1000):
         Flounder.__init__(self)
         
         logging.info("Preparing reference genome")
@@ -40,7 +40,7 @@ class TargetEnrichment(Flounder):
         self.bam = BamHandler(bam_file)
         self.background_threshold = background_threshold
         self.target_proximity = target_proximity
-        self.tile_size = 100
+        self.tile_size = tile_size
         
         
         
@@ -352,4 +352,28 @@ class TargetEnrichment(Flounder):
         return self.handle_output(plot, plot_type)
         # return ideo_data
     
+    
+    def get_off_target_stats(self):
+
+        data = self.get_off_target_annotation().df
+    
+        df = pd.concat(
+            [data["Chromosome"],
+             data["Start"].apply("{:,}".format),
+             data["End"].apply("{:,}".format),
+             (data["End"] - data["Start"]).apply("{:,}".format),
+             data["MeanCoverage"].apply("{:.2f}".format),
+             (data.strand_n + data.strand_p),
+             data["mean_read_len"].apply("{:.2f}".format),
+             (data.strand_p / (data.strand_n + data.strand_p) * 100).apply("{:.2f}".format),
+             data["read0"].apply("{:.2f}".format),
+             data["map0"].apply("{:.2f}".format)
+             ], axis=1, 
+            keys=["Chromosome", "Start", "End", "Width", "MeanCoverage", 
+                  "MappedReads", "MeanReadLength", "%FWD", "MeanReadQ", 
+                  "MeanMapQ"])
  
+        return df
+      
+    
+    
