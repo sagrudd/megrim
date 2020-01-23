@@ -35,8 +35,7 @@ target_enrichment = TargetEnrichment(reference_genome="/Users/srudd/Desktop/Huma
 target_enrichment.set_plot_type("screenshot")
 
 
-target_enrichment.get_mapping_stats()
-target_enrichment.set_plot_type("screenshot")
+
 
 #target_enrichment.get_background_annotation()
 

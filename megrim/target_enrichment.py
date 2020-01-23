@@ -17,7 +17,8 @@ import logging
 import functools
 import pyranges as pr
 from bokeh.plotting import figure
-from bokeh.models import Span, NumeralTickFormatter
+from bokeh.models.glyphs import VArea
+from bokeh.models import Span, NumeralTickFormatter, ColumnDataSource
 
 
 class TargetEnrichment(Flounder):
@@ -250,21 +251,17 @@ class TargetEnrichment(Flounder):
             index=["Target", "Target size", "Mean coverage", "Read count", 
                    scale, "MeanReadLen", "MeanReadQ", "MeanMapQ", "(+)Strand"])
         
-        
-        
     def get_target_plot(self, target, **kwargs):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         targets = self.get_on_target().df
         targets = targets.loc[targets.Name == target,]
         
-        aggregated_cov = self.ref.deep_dive(
+        aggregated_cov = self.ref.stranded_dive(
             bam=self.bam,
             arange=self.get_on_target(),
             target=target)
-
-        print(aggregated_cov)
-        
+        #print(aggregated_cov)
         plot = figure(
             title="Plot showing depth of coverage across ({}) target region".format(targets.Name.tolist()[0]), 
             x_axis_label="Position on Chr({})".format(str(targets.Chromosome.tolist()[0])),
@@ -276,12 +273,46 @@ class TargetEnrichment(Flounder):
                   line_width=2, line_color='#1F78B4', 
                   legend_label='Depth of Coverage')
         
-        start_line = Span(location=targets.Start.tolist()[0], dimension='height', line_color='red', line_width=2, line_alpha=0.7)
-        end_line = Span(location=targets.End.tolist()[0], dimension='height', line_color='red', line_width=2, line_alpha=0.7)
-        bg_line = Span(location=self.get_background_coverage(), dimension='width', line_color='orange', line_width=2, line_alpha=0.7)
+        start_line = Span(location=targets.Start.tolist()[0], dimension='height', line_color='red', line_width=2, line_alpha=0.5)
+        end_line = Span(location=targets.End.tolist()[0], dimension='height', line_color='red', line_width=2, line_alpha=0.5)
+        bg_line = Span(location=(self.get_background_coverage()*self.background_threshold), dimension='width', line_color='orange', line_width=2, line_alpha=0.7)
         
         plot.renderers.extend([start_line, end_line, bg_line])
         plot.xaxis.formatter = NumeralTickFormatter(format="0,0")
         return self.handle_output(plot, plot_type)
         
+    def get_stranded_plot(self, target, **kwargs):
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+        
+        targets = self.get_on_target().df
+        targets = targets.loc[targets.Name == target,]
+        
+        aggregated_cov = self.ref.stranded_dive(
+            bam=self.bam,
+            arange=self.get_on_target(),
+            target=target).df
+        aggregated_cov['baseline'] = 0
+        aggregated_cov['topline'] = aggregated_cov['+'] + aggregated_cov['-']
+        #print(aggregated_cov)
+        plot = figure(
+            title="Plot showing depth of coverage across ({}) target region".format(targets.Name.tolist()[0]), 
+            x_axis_label="Position on Chr({})".format(str(targets.Chromosome.tolist()[0])),
+            y_axis_label='Depth of coverage (X)', 
+            background_fill_color="lightgrey",
+            plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
+        
+        plot.varea_stack(stackers=["-","+"], x='Start', 
+                         color=['#1F78B4', '#A6CEE3'], 
+                         legend_label=["Forward strand", "Reverse strand"], 
+                         source=aggregated_cov)
+        
+        start_line = Span(location=targets.Start.tolist()[0], dimension='height', line_color='red', line_width=2, line_alpha=0.5)
+        end_line = Span(location=targets.End.tolist()[0], dimension='height', line_color='red', line_width=2, line_alpha=0.5)
+        bg_line = Span(location=(self.get_background_coverage()*self.background_threshold), dimension='width', line_color='orange', line_width=2, line_alpha=0.5)
+        
+        plot.renderers.extend([start_line, end_line, bg_line])
+        plot.xaxis.formatter = NumeralTickFormatter(format="0,0")
+        return self.handle_output(plot, plot_type)
+        
+    
     

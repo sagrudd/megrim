@@ -105,8 +105,7 @@ class ReferenceGenome(Flounder):
         return pr.PyRanges(
             df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
 
-    def deep_dive(self, bam, arange, target, target_proximity=5000, window_size=10):
-        
+    def stranded_dive(self, bam, arange, target, target_proximity=5000, window_size=10):
         targets = arange.df
         targets = targets.loc[targets.Name == target,]
         
@@ -114,22 +113,41 @@ class ReferenceGenome(Flounder):
         starts = int(targets.Start.tolist()[0]) - target_proximity
         ends = int(targets.End.tolist()[0]) + target_proximity
         
-        myrange = pr.PyRanges(chromosomes=[chromos], 
+        myrange = pr.PyRanges(pd.concat([pr.PyRanges(chromosomes=[chromos], 
                                starts=[starts], 
-                               ends=[ends])
-
-        focused_range = self.get_tiled_mean_coverage(
-            bam=bam, ranges=pr.gf.tile_genome(
-                myrange, window_size, tile_last=False))
-        return focused_range
-
-
-
-def weighted_percentile(universe, q=0.5):
+                               ends=[ends],
+                               strands=["+"]).df,
+                             pr.PyRanges(chromosomes=[chromos], 
+                               starts=[starts], 
+                               ends=[ends],
+                               strands=["-"]).df]))
+        xrange = pr.gf.tile_genome(
+                myrange, window_size, tile_last=False)
     
+        bam_data = bam.get_bam_ranges().df
+        #bam_data = bam_data.loc[bam_data.Strand=="+",]
+        bam_data = pr.PyRanges(bam_data)
+
+        rle = bam_data.to_rle(strand=True)
+        df = rle[xrange].df
+        
+        df['VR'] = df['Run'] * df['Value']
+        df = df.groupby(["Chromosome", "Start", "Strand"]).agg(
+            {"Chromosome": "first", "Start": "first", "End": "first", 
+             "Strand": "first", "Run":np.sum, "VR":np.sum})
+        df['MeanCoverage'] = df['VR'] / df['Run']
+        # pivot the data ...
+        df = df.reset_index(drop=True)
+        df = pd.pivot_table(
+            df, values = 'MeanCoverage', 
+            index=['Chromosome','Start', 'End'], 
+            columns = 'Strand').reset_index()
+        df['MeanCoverage'] = df["+"] + df["-"]
+        return pr.PyRanges(df)
+        
+def weighted_percentile(universe, q=0.5):
     df = pd.DataFrame({'v': universe.MeanCoverage.tolist(), 'w': (universe.End - universe.Start).tolist()})
     calc = wc.Calculator('w')  # w designates weight
-
     return calc.quantile(df, 'v', q)
 
 
