@@ -1,63 +1,137 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jan 21 18:09:10 2020
+target_enrichment.py
+====================
 
+This module contains a single class for managing the core of the Cas9-based
+target enrichment tutorial. The essence of the workflow is the judicious
+application of pyranges and pysam to distil coverage information from
+across the genome - emphasis on target regions defined within a starting
+bed file.
+
+please see the Nanopore Cas9 tutorial at
+http://github.com/nanoporetech/ont_tutorial_cas9
+
+Created on Tue Jan 21 18:09:10 2020
 @author: srudd
 """
 
 
 from megrim.environment import Flounder
 from megrim.genome_geometry import BamHandler, BedHandler
-from megrim.reference_genome import ReferenceGenome, augment_annotation, weighted_percentile
+from megrim.reference_genome import ReferenceGenome, augment_annotation, \
+    weighted_percentile
 from megrim.infographic_plots import InfographicPlot, InfographicNode
 import numpy as np
 import pandas as pd
 import logging
 import functools
-import pyranges as pr
 from bokeh.plotting import figure
-from bokeh.models.glyphs import VArea
-from bokeh.models import Span, NumeralTickFormatter, ColumnDataSource
+from bokeh.models import Span, NumeralTickFormatter
 
 
 class TargetEnrichment(Flounder):
+    r"""
+    TargetEnrichment class for supporting the Cas9 tutorial.
+
+    This class provides the target_enrichment functionality used within the
+    ont_tutorial_cas9 tutorial. The class leverages functionality from other
+    modules within the megrim framework to simplify and abstract the process
+    of defining on-target regions of the genome, defining the background
+    genome and performing calculations to derive off-target regions.
+
+    Parameters
+    ----------
+        reference_genome: ``file.path``
+            a reference genome is required for the analyses - the provided
+            path will be used to create an instance of
+            :class:`~megrim.reference_genome`
+        bed_file: ``**file.path**``
+            a bed format file is required to define the genomic locations
+            of the target region(s) of interest
+        bam_file: ``**file.path**``
+            The bam file is required to provide mapping information for reads
+            across the genome and within the target regions. Please note that
+            this bam file *must* be indexed
+        target_proximity: ``int``
+            This defines the regions up- and down-stream of the defined
+            target regions that will be considered as target-proximal
+            regions. The default is 2000 bases
+        background_threshold: ``**int**``
+            This threshold is used to defined what is off-target - the
+            mean depth-of-coverage across the non-target/target-proximal
+            regions of the genome is calculated and off-target is defined
+            as a region with > (background_threshold * mean background
+            coverage). The default value is 20.
+        tile_size: ``**int**``
+            The genome is tiled for the depth of coverage analyses. This
+            parameter is used to define the width of the tile. Shorter windows
+            provide higher resolution but have a compute penalty. The default
+            value is 1000.
+
+    .. note::
+
+        the TargetEnrichment class inherits the Flounder class and \
+        requires functionality from classes including Bam, Bed and \
+        ReferenceGenome
+    """
 
     def __init__(self, reference_genome=None, bed_file=None, bam_file=None,
-                 target_proximity=5000, background_threshold=20, 
+                 target_proximity=2000, background_threshold=20,
                  tile_size=1000):
         Flounder.__init__(self)
-        
+
         logging.info("Preparing reference genome")
         self.ref = ReferenceGenome(reference_genome)
-        
+
         logging.info("Preparing BED coordinates")
         self.bed = BedHandler(bed_file)
         self.bed.set_reference(self.ref)
         self.bed.set_target_proximity(target_proximity)
-        
+
         logging.info("setting BAM file")
         self.bam = BamHandler(bam_file)
         self.background_threshold = background_threshold
         self.target_proximity = target_proximity
         self.tile_size = tile_size
-        
-        
-        
+
     @functools.lru_cache()
     def get_on_target(self):
         """
-        on-target is defined in the host bed file
+        Get pyranges format on-target coordinates and coverage.
 
-        Parameters
-        ----------
-        tile_size : TYPE, optional
-            DESCRIPTION. The default is 100.
+        This method returns the coordinates for the defined target regions
+        used within the target enrichment analysis. This is a simple
+        reflection of the content provided within the provided BED file
 
         Returns
         -------
-        on_target_universe : TYPE
-            DESCRIPTION.
+        on_target_universe : pyranges
+            This is a pyranges refection of the tab-delimited BED content
+            provided as starting material.
+
+        ::
+
+            +--------------+-----------+-----------+--------------------+------------+
+            | Chromosome   | Start     | End       | MeanCoverage       | Name       |
+            | (category)   | (int32)   | (int32)   | (float64)          | (object)   |
+            |--------------+-----------+-----------+--------------------+------------|
+            | 1            | 155179779 | 155195266 | 274.39181248789305 | MUC1       |
+            | 4            | 3072436   | 3079444   | 1060.255565068493  | HTT        |
+            | 6            | 170554805 | 170563019 | 926.0217920623326  | SCA17      |
+            | 9            | 27572666  | 27576436  | 521.1355437665783  | C9orf72    |
+            | ...          | ...       | ...       | ...                | ...        |
+            | X            | 147910539 | 147931116 | 597.4970112261262  | FMR1       |
+            | 22           | 45791084  | 45797924  | 1638.6897660818713 | SCA10      |
+            | 19           | 13205097  | 13210441  | 810.1785179640718  | SCA6       |
+            | 14           | 92067404  | 92073500  | 1261.893372703412  | SCA3       |
+            +--------------+-----------+-----------+--------------------+------------+
+
+        >>> import megrim
+        from megrim.environment import get_packaged_file_path
+
+        bam = get_packaged_file_path()
 
         """
         logging.info("loading on target coordinates")
@@ -65,27 +139,101 @@ class TargetEnrichment(Flounder):
             self.bam, ranges=self.bed.get_target_ranges())
         on_target_universe.Name = self.bed.get_target_ranges().Name
         return on_target_universe
-    
+
     @functools.lru_cache()
     def get_on_target_annotation(self):
+        """
+        Get pyranges format on-target coordinates augmented with bam info.
+
+        This method returns annotation for the on_target
+        regions of the genome. see
+        :meth:`~megrim.target_enrichment.TargetEnrichment.get_on_target`
+        The core coordinates are augmented with additional annotation scraped
+        from the provided BAM file.
+
+        Returns
+        -------
+        augmented_annotation: ``pyranges``
+            A rich pyranges object augmented with additional data - see
+            :meth:`~megrim.reference_genome.augment_annotation`
+
+        """
         logging.info("loading on target annotation")
-        return augment_annotation(
+        augmented_annotation = augment_annotation(
             self.bam, self.get_on_target())
-        
+        return augmented_annotation
+
     @functools.lru_cache()
     def get_target_proximal(self):
+        """
+        Get pyranges format target-proximal coordinates and coverage.
+
+        This method returns the coordinates for the target-proximal regions
+        of the genome. Target proximity is defined at class initialisation
+        with the ``target_proximity`` parameter. The targets are as
+        defined with the provided bed file and as reported by
+        :meth:`~megrim.target_enrichment.TargetEnrichment.get_on_target`
+
+        Returns
+        -------
+        target_proximal_universe: ``pyranges``
+            This is a pyranges refection of the regions of the genome that
+            are immediately proximal to on-target regions.
+
+
+        """
         logging.info("loading target proximal coordinates")
         return self.ref.get_tiled_mean_coverage(
             self.bam, ranges=self.bed.get_target_proximal_ranges())
-    
+
     @functools.lru_cache()
     def get_target_proximal_annotation(self):
+        """
+        Get contexually annotated info relating to target-proximal regions.
+
+        See :meth:`~megrim.reference_genome.augment_annotation` for
+        description of the method for extracting target proximal coordinates
+        and basic metadata. This method takes these results and returns
+        deeper context derived from a quick parse of the accompanying BAM
+        file
+
+        Returns
+        -------
+        augmented_annotation: ``pyranges``
+            A rich pyranges object augmented with additional data - see
+            :meth:`~megrim.reference_genome.augment_annotation`
+
+        """
         logging.info("loading target proximal annotation")
         return augment_annotation(
             self.bam, self.get_target_proximal())
 
     @functools.lru_cache()
-    def get_off_target(self, tile_size=None):    
+    def get_off_target(self, tile_size=None):
+        """
+        Get pyranges format off_target coordinates and coverage.
+
+        This method returns the coordinates for the off-target but read-
+        dense regions of the genome. This method builds a coverage-map of the
+        genome and filters out the on-target and target proximal regions -
+        the remaining untargetted genome is then assessed for mean coverage;
+        the regions that correspond to >= mean.untargetted coverage *
+        background_threshold are defined as being off target.
+
+        Parameters
+        ----------
+        tile_size: ``int``
+            This parameter defines the window size of the tiles to be
+            placed across the genome. The smaller the window the better the
+            resolution of off-target regions, but the greater the cost in
+            compute time.
+
+        Returns
+        -------
+        off_target_universe: ``pyranges``
+            This is a pyranges refection of the regions of the genome that
+            are defined as being off-target.
+        """
         if tile_size is None:
             tile_size = self.tile_size
         logging.info(
@@ -101,6 +249,20 @@ class TargetEnrichment(Flounder):
     
     @functools.lru_cache()
     def get_background_coverage(self, tile_size=None):
+        """
+        
+
+        Parameters
+        ----------
+        tile_size : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        mean_coverage : TYPE
+            DESCRIPTION.
+
+        """
         if tile_size is None:
             tile_size = self.tile_size
         logging.info(
@@ -114,23 +276,71 @@ class TargetEnrichment(Flounder):
             
     @functools.lru_cache()    
     def get_off_target_annotation(self, tile_size=None):    
+        """
+        
+
+        Parameters
+        ----------
+        tile_size : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         logging.info("loading off target annotation")
         return augment_annotation(
             self.bam, self.get_off_target(tile_size=tile_size))
         
     @functools.lru_cache()
     def get_background(self):
+        """
+        
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         logging.info("loading background coordinates")
         return self.ref.get_tiled_mean_coverage(
             self.bam, ranges=self.bed.get_untargeted_ranges().subtract(self.get_off_target()))
     
     @functools.lru_cache()
     def get_background_annotation(self):
+        """
+        
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         logging.info("loading background annotation")
         return augment_annotation(
             self.bam, self.get_background())
         
     def get_fine_coverage_aggregate(self, universe, target_proximity=None):
+        """
+        
+
+        Parameters
+        ----------
+        universe : TYPE
+            DESCRIPTION.
+        target_proximity : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        aggregated_cov : TYPE
+            DESCRIPTION.
+
+        """
         if target_proximity is None:
             target_proximity = self.target_proximity
         aggregated_cov = self.ref.deep_dive(
@@ -138,12 +348,30 @@ class TargetEnrichment(Flounder):
         return aggregated_cov
     
     def get_mapped_bases(self): 
+        """
+        
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         return self.get_off_target_annotation().df.bases_start.sum() + \
             self.get_background_annotation().df.bases_start.sum() + \
             self.get_target_proximal_annotation().df.bases_start.sum() + \
             self.get_on_target_annotation().df.bases_start.sum()
             
     def get_on_target_perc(self):
+        """
+        
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         return self.get_on_target_annotation().df.rstart.sum() / \
             (self.get_on_target_annotation().df.rstart.sum() + \
              self.get_off_target_annotation().df.rstart.sum() + \
@@ -151,17 +379,47 @@ class TargetEnrichment(Flounder):
                      self.get_target_proximal_annotation().df.rstart.sum()) * 100
                 
     def get_depletion_factor(self):
+        """
+        
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         # depletion_label = "FAILED"
         return weighted_percentile(self.get_on_target_annotation()) / \
             weighted_percentile(self.get_background_annotation())
             
     def get_mean_target_coverage(self):
+        """
+        
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         return self.get_on_target_annotation().df.MeanCoverage.repeat(
             self.get_on_target_annotation().End - \
                 self.get_on_target_annotation().Start).mean()
             
     def get_cas9_exec_infographic(self, **kwargs):
+        """
         
+
+        Parameters
+        ----------
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         (plot_width, plot_dpi) = self.handle_kwargs(
             ["plot_width", "plot_dpi"], **kwargs)
                 
@@ -187,7 +445,22 @@ class TargetEnrichment(Flounder):
 
         
     def get_mapping_stats(self, annotated_ranges, scale="Megabases"):
+        """
         
+
+        Parameters
+        ----------
+        annotated_ranges : TYPE
+            DESCRIPTION.
+        scale : TYPE, optional
+            DESCRIPTION. The default is "Megabases".
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         scaleVal = 1
         if scale == "Gigabases":
             scaleVal = 1e9
@@ -213,6 +486,15 @@ class TargetEnrichment(Flounder):
                           "Mean coverage (X)": "{:.2f}".format(mean_cov)})
     
     def get_mapping_summary_stats(self):
+        """
+        
+
+        Returns
+        -------
+        df : TYPE
+            DESCRIPTION.
+
+        """
         on_t = self.get_mapping_stats(self.get_on_target_annotation())
         off_t = self.get_mapping_stats(self.get_off_target_annotation())
         t_p = self.get_mapping_stats(self.get_target_proximal_annotation())
@@ -224,6 +506,22 @@ class TargetEnrichment(Flounder):
             
     
     def get_target_performance(self, target, scale="Megabases"):
+        """
+        
+
+        Parameters
+        ----------
+        target : TYPE
+            DESCRIPTION.
+        scale : TYPE, optional
+            DESCRIPTION. The default is "Megabases".
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         scaleVal = 1
         if scale == "Gigabases":
             scaleVal = 1e9
@@ -245,6 +543,20 @@ class TargetEnrichment(Flounder):
             "{:.1f}".format(float(df.strand_p / (df.strand_n + df.strand_p) * 100))    
         
     def get_target_performance_summary(self, scale="Megabases"):
+        """
+        
+
+        Parameters
+        ----------
+        scale : TYPE, optional
+            DESCRIPTION. The default is "Megabases".
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         targets = self.get_on_target().Name
         return targets.apply(self.get_target_performance).apply(
             pd.Series, 
@@ -252,6 +564,22 @@ class TargetEnrichment(Flounder):
                    scale, "MeanReadLen", "MeanReadQ", "MeanMapQ", "(+)Strand"])
         
     def get_target_plot(self, target, **kwargs):
+        """
+        
+
+        Parameters
+        ----------
+        target : TYPE
+            DESCRIPTION.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         targets = self.get_on_target().df
@@ -282,6 +610,7 @@ class TargetEnrichment(Flounder):
         return self.handle_output(plot, plot_type)
         
     def get_stranded_plot(self, target, **kwargs):
+
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         targets = self.get_on_target().df
@@ -315,6 +644,20 @@ class TargetEnrichment(Flounder):
         return self.handle_output(plot, plot_type)
     
     def get_ideogram(self, **kwargs):
+        """
+        
+
+        Parameters
+        ----------
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         
         logging.info("preparing ideogram")
@@ -354,7 +697,15 @@ class TargetEnrichment(Flounder):
     
     
     def get_off_target_stats(self):
+        """
+        
 
+        Returns
+        -------
+        df : TYPE
+            DESCRIPTION.
+
+        """
         data = self.get_off_target_annotation().df
     
         df = pd.concat(

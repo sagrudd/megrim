@@ -5,7 +5,7 @@ Created on Fri Dec 13 08:56:25 2019
 
 @author: srudd
 
-This is a functional copy of the environment controls provided in the 
+This is a functional copy of the environment controls provided in the
 nanopoRe package - for occasions such as in the development of EPI2ME-labs,
 a user may be working in a non-persistent workspace with primary data,
 scripts and results in a peripheral location
@@ -14,7 +14,7 @@ scripts and results in a peripheral location
 import logging
 import re
 from pkg_resources import resource_string, get_distribution, resource_filename
-from IPython.display import Image, display, Markdown 
+from IPython.display import Image, display, Markdown
 from bokeh.plotting import show
 from bokeh.io import export_png
 from bokeh.io.export import get_screenshot_as_png
@@ -26,10 +26,12 @@ import tempfile
 
 class Flounder:
     """
+    Flounder class provides abstraction of parameters across tutorials.
+
     FloundeR was the name of the R package that managed tutorial content,
     workflows and logic - deprecated with move to Python - retained here
     as a memorial to a great package name.
-    
+
     This now unintuitively named package is responsible for the orchestration
     of workspace paths, directory structures and is aiming towards
     persistence of analysis states where possible
@@ -53,62 +55,63 @@ class Flounder:
         new_me.set_plot_type(self.get_plot_type())
         new_me.set_plot_tools(self.get_plot_tools())
         new_me.set_plot_dpi(self.get_plot_dpi())
-        
+
     def set_path(self, path):
         self.location = path
 
     def get_path(self):
         return self.location
-    
+
     def set_results_dir(self, results_dir):
         self.results_dir = results_dir
-        
+
     def get_results_dir(self):
         return self.results_dir
-    
+
     def set_plot_width(self, plot_width):
         self.plot_width = plot_width
-        
+
     def set_plot_height(self, plot_height):
         self.plot_height = plot_height
-        
+
     def set_plot_type(self, plot_type):
         self.plot_type = plot_type
-        
+
     def set_plot_tools(self, plot_tools):
         self.plot_tools = plot_tools
-        
+
     def set_plot_dpi(self, plot_dpi):
         self.plot_dpi = plot_dpi
-        
+
     def get_plot_height(self):
         return self.plot_height
-    
+
     def get_plot_width(self):
         return self.plot_width
-    
+
     def get_plot_type(self):
         return self.plot_type
-    
+
     def get_plot_tools(self):
         return self.plot_tools
-    
+
     def get_plot_dpi(self):
         return self.plot_dpi
-    
+
     def get_destination(self):
         destination_dir = self.get_path()
         if destination_dir is None:
             logging.error("Flounder requires a path for writing files to")
             sys.exit(0)
         if self.get_results_dir() is not None:
-            destination_dir = os.path.join(destination_dir, self.get_results_dir())
+            destination_dir = os.path.join(
+                destination_dir, self.get_results_dir())
         logging.info("destination --> %s" % destination_dir)
         if not os.path.exists(destination_dir):
             logging.warning("creating DIR==%s" % destination_dir)
             os.makedirs(destination_dir)
         return destination_dir
-        
+
     def handle_output(self, p, plot_type, prefix="bokeh_"):
         if plot_type == 'native':
             return p
@@ -117,7 +120,8 @@ class Flounder:
             return None
         elif plot_type == 'png':
             logging.debug("exporting figure to png")
-            fd, temp_path = tempfile.mkstemp(dir=self.get_destination(), suffix=".png", prefix=prefix)
+            fd, temp_path = tempfile.mkstemp(
+                dir=self.get_destination(), suffix=".png", prefix=prefix)
             os.close(fd)
             logging.info("tmppath@%s" % temp_path)
             export_png(p, filename=temp_path)
@@ -131,7 +135,7 @@ class Flounder:
             logging.error("unknown plottype")
             sys.exit(0)
             return "unknown plottype"
-    
+
     def handle_kwargs(self, fields, **kwargs):
         stuff = []
         for f in fields:
@@ -154,7 +158,6 @@ class Flounder:
         tres = tuple(stuff)
         logging.debug(tres)
         return tres
-    
 
 def get_megrim_version():
     try:
@@ -172,7 +175,27 @@ def get_megrim_version():
 
 def tutorial_branding(tutorial=None, legend=None, 
                       telemetry=None):
-    
+    """
+    Display megrim branding information.
+
+    This function is used to display the package branding within the tutorial
+    framework and offers hooks for telemetry plugins.
+
+    Parameters
+    ----------
+    tutorial : TYPE, optional
+        DESCRIPTION. The default is None.
+    legend : TYPE, optional
+        DESCRIPTION. The default is None.
+    telemetry : TYPE, optional
+        DESCRIPTION. The default is None.
+
+    Returns
+    -------
+    str
+        DESCRIPTION.
+
+    """
     def get_framework():
         try:
             ipy_str = str(type(get_ipython()))
@@ -182,14 +205,26 @@ def tutorial_branding(tutorial=None, legend=None,
                 return 'ipython'
         except:
             return "terminal"
-        
+
     framework = get_framework()
     if framework == "jupyter":
         display(Image(resource_string(__name__, 'data/ONT_logo.png')))
-        if legend != None:
+        if legend is not None:
             display(Markdown("# "+legend))
 
 
-            
+def get_packaged_file_path():
+    r"""
+    Get path for installed megrim data folder.
 
-        
+    The megrim module is distributed with some example data files that can
+    be used to demonstrate the core functionality of its workflows. This
+    function should be used programatically determine the path; this can
+    be used during the documentation process too.
+
+    Returns
+    -------
+    ``PosixPath`` of installed megrim data folder
+
+    """
+    return pathlib.Path(resource_filename('megrim', 'data'))
