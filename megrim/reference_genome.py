@@ -157,6 +157,12 @@ def augment_annotation(bam, ranges):
         def extract_annot(row):
             # bam_data['reference_start'] >= 155179779
             # start_data = bam_data[bam_data['reference_start'] >= 155179779]
+            
+            @ToDo
+            There is something FUBAR in the start_data calculation - we are 
+            looking for reads that start in an interval irrespective of their
+            strand ... this needs to be fixed!
+            
             bam_data = bam.get_sam_annotation(row.Chromosome, row.Start, row.End)
             start_data = bam_data[bam_data['reference_start'] >= row.Start]
             # rstart - the number of reads that start within the given interval
