@@ -105,9 +105,9 @@ class TargetEnrichment(Flounder):
         used within the target enrichment analysis. This is a simple
         reflection of the content provided within the provided BED file
 
-        Returns
+        Returns:
         -------
-        on_target_universe : pyranges
+        on_target_universe: ``pyranges``
             This is a pyranges refection of the tab-delimited BED content
             provided as starting material.
 
@@ -128,10 +128,8 @@ class TargetEnrichment(Flounder):
             | 14           | 92067404  | 92073500  | 1261.893372703412  | SCA3       |
             +--------------+-----------+-----------+--------------------+------------+
 
-        >>> import megrim
-        from megrim.environment import get_packaged_file_path
-
-        bam = get_packaged_file_path()
+        .. program-output:: 
+            print("Hello world")
 
         """
         logging.info("loading on target coordinates")
