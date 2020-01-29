@@ -128,8 +128,6 @@ class TargetEnrichment(Flounder):
             | 14           | 92067404  | 92073500  | 1261.893372703412  | SCA3       |
             +--------------+-----------+-----------+--------------------+------------+
 
-        .. program-output:: 
-            print("Hello world")
 
         """
         logging.info("loading on target coordinates")
