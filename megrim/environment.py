@@ -46,6 +46,7 @@ class Flounder:
         self.plot_type = plot_type
         self.plot_tools = plot_tools
         self.plot_dpi = plot_dpi
+        self.seq_sum = None
 
     def sync(self, new_me):
         new_me.set_path(self.get_path())

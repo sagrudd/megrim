@@ -58,8 +58,8 @@ class SequenceSummaryHandler(Flounder):
         if target_file is not None:
             self._import_data()
         elif target_data is not None:
-           self.seq_sum = target_data
-           self.seq_sum_head = target_data.head()
+            self.seq_sum = target_data
+            self.seq_sum_head = target_data.head()
 
 
     def _load_seqsum(self, file=None):
@@ -231,6 +231,8 @@ class SequenceSummaryHandler(Flounder):
         # print(("_", fastq_id))
         return fastq_id
 
+    def get_read_count(self):
+        return len(self.seq_sum.index)
 
     def executive_summary(self, **kwargs):
         """
@@ -245,7 +247,7 @@ class SequenceSummaryHandler(Flounder):
         """
         (plot_width, plot_dpi) = self.handle_kwargs(
             ["plot_width", "plot_dpi"], **kwargs)
-        read_count = len(self.seq_sum)
+        read_count = self.get_read_count()
         total_bases = self.seq_sum['sequence_length_template'].sum()
         
         flowcell_node = InfographicNode(legend="flowcell",
@@ -540,6 +542,11 @@ class SequenceSummaryHandler(Flounder):
         
         l_seq_sum.iloc[:,[2]] = assignments
         l_seq_sum.iloc[:,[3,4,5,6]] = 0
+
+        # There is a logic issue - at the time of writing it was assumed that
+        # sequence collections would be native and contain a mix of pass
+        # and fail sequences ...
+
         l_seq_sum.loc[~l_seq_sum.passes_filtering, ["fail_reads"]] = 1
         l_seq_sum.loc[l_seq_sum.passes_filtering, ["pass_reads"]] = 1
         l_seq_sum.loc[
