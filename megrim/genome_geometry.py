@@ -12,6 +12,7 @@ import pandas as pd
 import pyranges as pr
 import functools
 import pysam
+import sys
 
 
 class BedHandler:
@@ -92,7 +93,8 @@ class BamHandler:
         return self.get_bam_ranges().to_rle(strand=False)
 
     def get_sam_reads(self, chromosome, start, end):
-        return self.samfile.fetch(chromosome, start, end)
+        # logging.info("getSamReads ({}) {}:{}".format(chromosome, start, end))
+        return self.samfile.fetch(chromosome, int(start), int(end))
 
     def get_sam_annotation(self, chromosome, start, end):
         annot = self.get_sam_reads(chromosome, start, end)
@@ -105,9 +107,11 @@ class BamHandler:
         cigar_i = []
         cigar_d = []
         nm = []
+        read_counter = 0
         for read in annot:
             if not any([read.is_secondary, read.is_supplementary, 
                         read.is_qcfail, read.is_duplicate]):
+                read_counter += 1
                 start.append(read.reference_start)
                 reference_length.append(read.reference_length)
                 mapping_quality.append(read.mapping_quality)
@@ -131,4 +135,6 @@ class BamHandler:
                      'cigar_i': cigar_i,
                      'cigar_d': cigar_d,
                      'nm': nm}
-        return pd.DataFrame.from_dict(annot)
+        if read_counter > 0: 
+            return pd.DataFrame.from_dict(annot)
+        return None
