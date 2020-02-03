@@ -165,8 +165,8 @@ class VirusGenome(Flounder):
         coverage_dist = coverage_dist.fillna(0)
         coverage_dist["colour"] = "#1F78B4"
 
-        print(coverage_dist)
-        print(coverage_dist['count'].sum())
+        # print(coverage_dist)
+        # print(coverage_dist['count'].sum())
 
         p = figure(title="Histogram showing distribution of coverage",
                    background_fill_color="lightgrey", plot_width=plot_width,
