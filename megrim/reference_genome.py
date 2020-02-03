@@ -162,6 +162,11 @@ def augment_annotation(bam, ranges):
             
             bam_data = bam.get_sam_annotation(row.Chromosome, row.Start, row.End)
             
+            if bam_data.empty:
+                return 0, 0, 0, 0, \
+                   0, 0, 0, 0, 0, 0, 0, 0, \
+                   0, 0
+            
             start_data = bam_data.loc[
                 ((bam_data.reference_start + bam_data.reference_length 
                   <= row.End) & (bam_data.strand=="+") | 
