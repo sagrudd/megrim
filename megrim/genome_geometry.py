@@ -94,10 +94,17 @@ class BamHandler:
 
     def get_sam_reads(self, chromosome, start, end):
         # logging.info("getSamReads ({}) {}:{}".format(chromosome, start, end))
-        return self.samfile.fetch(chromosome, int(start), int(end))
+        result = None
+        try:
+            result = self.samfile.fetch(chromosome, int(start), int(end))
+        except Exception:
+            result = None
+        return result
 
     def get_sam_annotation(self, chromosome, start, end):
         annot = self.get_sam_reads(chromosome, start, end)
+        if annot is None:
+            return None
         start = []
         reference_length = []
         mapping_quality = []
