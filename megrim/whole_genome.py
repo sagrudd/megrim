@@ -155,6 +155,7 @@ class VirusGenome(Flounder):
                                 ["assignment"]).agg(
                                     {"assignment": ["first"],
                                      "tally": [np.sum]})
+        xxx.columns = xxx.columns.droplevel()
         yyy = pd.DataFrame({"start": boundaries[:-1],
                             "end": boundaries[1:]},
                            index=np.arange(1, len(boundaries)))
