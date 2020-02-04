@@ -14,7 +14,6 @@ from math import log10
 import pandas as pd
 import logging
 import warnings
-import swifter
 import weightedcalcs as wc
 
 # from tqdm.auto import tqdm
