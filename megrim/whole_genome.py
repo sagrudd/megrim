@@ -12,7 +12,7 @@ from megrim.genome_geometry import BamHandler
 from bokeh.plotting import figure
 import numpy as np
 import pandas as pd
-from bokeh.models import NumeralTickFormatter
+from bokeh.models import NumeralTickFormatter, Label
 
 
 class VirusGenome(Flounder):
@@ -178,4 +178,52 @@ class VirusGenome(Flounder):
         p.xaxis.axis_label = 'Depth-of-coverage (X-fold)'
         p.yaxis.axis_label = 'Bases of genome (n)'
         return self.handle_output(p, plot_type)
+
+    def plot_coverage_roc(self, max_depth=None, bins=100, tile_size=10, 
+                          boundaries_of_interest=[10, 100], **kwargs):
+
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
+            ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+
+        coverage = self.get_coverage(tile_size=tile_size)
+        print(coverage)
+        if max_depth is None:
+            max_depth = coverage.MeanCoverage.max() + 1
+            print("max_depth set to {}".format(max_depth))
+        boundaries = np.linspace(
+            0, max_depth, num=bins, endpoint=True, retstep=False)
+        print(boundaries)
+        assignments = np.digitize(coverage.MeanCoverage, boundaries)
+        cov_data = pd.DataFrame({"assignment": assignments,
+                                 "bases": (coverage.End - coverage.Start)})
+        cov_data = cov_data.groupby("assignment").agg({"assignment": "first",
+                                                       "bases": np.sum})
+        # add the missing values
+        cov_data = cov_data.reindex(
+            pd.Index(
+                pd.Series(boundaries).index)
+            ).reset_index().drop(["assignment"], axis=1).fillna(0)
+        # add the cumulative sum to the data
+        cov_data['frac'] = cov_data.bases.sum() - np.cumsum(cov_data.bases)
+        # prepare the cumsum as percentage
+        cov_data['perc'] = cov_data.frac / cov_data.bases.sum() * 100
+        print(cov_data)
+
+        plot = figure(
+            title='Plot showing % of genome covered at different depths',
+            x_axis_label='Depth of coverage (X)',
+            y_axis_label='Percentage of Genome covered(%)',
+            background_fill_color="lightgrey",
+            plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
+
+        for b in boundaries_of_interest:
+            # b is coverage - get corresponding perc
+            bases = coverage[coverage.MeanCoverage >= b].lengths().sum()
+            perc = bases / cov_data.bases.sum() * 100
+            legend = "{}X".format(b)
+            plot.line([0, b, b], [perc, perc, 0], line_width=2, line_color='red')
+            plot.add_layout(Label(x=b, y=perc, text=legend, text_color='red'))
+
+        plot.step(boundaries, cov_data.perc, line_width=2, mode="before")
+        return self.handle_output(plot, plot_type)
 

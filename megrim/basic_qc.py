@@ -220,6 +220,8 @@ class SequenceSummaryHandler(Flounder):
         fastq_id = str(self.seq_sum_head[target].iloc[0]).split("_")
         if len(fastq_id) == 3:
             fastq_id = fastq_id[0]
+        elif len(fastq_id) == 4:
+            fastq_id = fastq_id[0]
         elif len(fastq_id) == 15:
             fastq_id = fastq_id[2]
         else:
@@ -1125,11 +1127,10 @@ class SequenceSummaryHandler(Flounder):
         return sub_ssh
 
 
-
-
-
 class SequencingSummaryGetChannelMap:
     """
+    A class to help with presentation of Nanopore Flowcell layouts.
+
     This class is responsible for the handling of flowcell channel maps -
     the prototype of this class was written in R (see @sagrudd/nanopoRe);
     code has been transposed and simplified
@@ -1140,6 +1141,8 @@ class SequencingSummaryGetChannelMap:
 
     def get_platform(self):
         """
+        Get the name of the sequencing platform used to generate data.
+
         method scores the defined channels in the provided sequencing_summary
         to look for the largest defined channel - based on the number observed
         reports whether it is most likely to be Flongle / MinION or PromethION
@@ -1149,7 +1152,6 @@ class SequencingSummaryGetChannelMap:
         String representation of flowcell type (MinION/Flongle/PromethION)
 
         """
-
         platform = "MinION"
         max_channel = self.seq_sum['channel'].max()
         logging.debug("MaxChannel == ", max_channel)
@@ -1166,10 +1168,12 @@ class SequencingSummaryGetChannelMap:
 
     def get_minion_map(self):
         """
+        Prepare X,Y coordinates for a MinION flowcell.
+
         The R code is below; straight forward and minimal ...
-        
+
         https://wiki/pages/viewpage.action?spaceKey=ELEC&title=Minion+Chip+map
-        
+
         blockCalc <- function(i) {
             m <- matrix(seq(i, i + 63, by = 1), ncol = 8, byrow = TRUE)
             cbind(m[seq(5, 8, by = 1), ], m[seq(4), rev(seq(8))])
@@ -1187,12 +1191,10 @@ class SequencingSummaryGetChannelMap:
         None.
 
         """
-
         def block_calc(i):
             m = np.arange(i, (i + 64)).reshape((8, 8), order='C')
             row = np.c_[m[np.arange(4, 8).tolist(), :],
-                        m[np.arange(0, 4).tolist(),][:, np.arange(8)[::-1]]
-            ]
+                        m[np.arange(0, 4).tolist(), ][:, np.arange(8)[::-1]]]
             return row
 
         vector = [1, 449, 385, 321, 257, 193, 129, 65]
