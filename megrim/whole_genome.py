@@ -186,13 +186,11 @@ class VirusGenome(Flounder):
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
 
         coverage = self.get_coverage(tile_size=tile_size)
-        print(coverage)
         if max_depth is None:
             max_depth = coverage.MeanCoverage.max() + 1
             print("max_depth set to {}".format(max_depth))
         boundaries = np.linspace(
             0, max_depth, num=bins, endpoint=True, retstep=False)
-        print(boundaries)
         assignments = np.digitize(coverage.MeanCoverage, boundaries)
         cov_data = pd.DataFrame({"assignment": assignments,
                                  "bases": (coverage.End - coverage.Start)})
@@ -207,7 +205,6 @@ class VirusGenome(Flounder):
         cov_data['frac'] = cov_data.bases.sum() - np.cumsum(cov_data.bases)
         # prepare the cumsum as percentage
         cov_data['perc'] = cov_data.frac / cov_data.bases.sum() * 100
-        print(cov_data)
 
         plot = figure(
             title='Plot showing % of genome covered at different depths',
