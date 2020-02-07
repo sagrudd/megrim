@@ -179,9 +179,42 @@ class VirusGenome(Flounder):
         p.yaxis.axis_label = 'Bases of genome (n)'
         return self.handle_output(p, plot_type)
 
-    def plot_coverage_roc(self, max_depth=None, bins=100, tile_size=10, 
+    def plot_coverage_roc(self, max_depth=None, bins=100, tile_size=10,
                           boundaries_of_interest=[10, 100], **kwargs):
+        """
+        Prepare ROC-like plot showing distribution of coverage across genome.
 
+        This method prepares a plot that aims to visualise the fraction of
+        the genome that is reflected at different levels of coverage. The
+        genome is split into windows of size tile_size and coverage averaged
+        across these windows. The maximum depth is calculated and the
+        coverages are binned into bins bins. The data is then prepared so
+        that 100% of the genome is covered at 0 depth going to 0% of the
+        genome at max_depth+1 depth.
+
+        Parameters
+        ----------
+        max_depth: int
+            The maximum depth to render within the plot.
+            # TODO: this looks borked
+        bins: int
+            The number of bins to present in the plot. This is really an
+            aesthetic thing only.
+        tile_size: int
+            The tile size to summarise depths at. The default is 10.
+        boundaries_of_interest: list of ints
+            This will direct the plotting of lines to show the positions where
+            specific coverages are reached. The default is [10, 100].
+        **kwargs: **kwargs
+            can provide a number of possible options to the Flounder class in
+            the background that may be used to alter the plot dimensions,
+            bokeh tools and plot rendering options.
+
+        Returns
+        -------
+        bokeh image plot
+
+        """
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
 
@@ -218,9 +251,9 @@ class VirusGenome(Flounder):
             bases = coverage[coverage.MeanCoverage >= b].lengths().sum()
             perc = bases / cov_data.bases.sum() * 100
             legend = "{}X".format(b)
-            plot.line([0, b, b], [perc, perc, 0], line_width=2, line_color='red')
+            plot.line(
+                [0, b, b], [perc, perc, 0], line_width=2, line_color='red')
             plot.add_layout(Label(x=b, y=perc, text=legend, text_color='red'))
 
         plot.step(boundaries, cov_data.perc, line_width=2, mode="before")
         return self.handle_output(plot, plot_type)
-
