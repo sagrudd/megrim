@@ -209,7 +209,7 @@ class genbank:
             0-based index of given pos within the codon sequence returned.
 
         """
-        thing = genbank.what_is_at(pos)
+        thing = self.what_is_at(pos)
         if thing == genbank.INTERGENIC:
             return None, None
         features = self.get_thing(thing)
