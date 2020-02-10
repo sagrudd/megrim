@@ -311,7 +311,7 @@ class genbank:
         triplet, tripos = self.get_triplet(position)
         if triplet is None:
             return None
-        mtriplet = genbank.get_variant_triplet(position, variant)
+        mtriplet = self.get_variant_triplet(position, variant)
         if triplet.translate() == mtriplet.translate():
             return "Synonymous [{}]".format(triplet.translate())
         elif mtriplet.translate() == "*":
