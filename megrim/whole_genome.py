@@ -179,8 +179,8 @@ class VirusGenome(Flounder):
         p.yaxis.axis_label = 'Bases of genome (n)'
         return self.handle_output(p, plot_type)
 
-    def plot_coverage_roc(self, max_depth=None, bins=100, tile_size=10,
-                          boundaries_of_interest=[10, 100], **kwargs):
+    def plot_coverage_fractions(self, max_depth=None, bins=100, tile_size=10,
+                                boundaries_of_interest=[10, 100], **kwargs):
         """
         Prepare ROC-like plot showing distribution of coverage across genome.
 
