@@ -152,12 +152,10 @@ class genbank:
             if isinstance(features.location, FeatureLocation):
                 results.append(pos - (features.location.start))
             elif isinstance(features.location, CompoundLocation):
-                print(features.location)
                 # we are working over multiple intervals - maintain an offset
                 offset = 0
                 for part in features.location.parts:
                     if (pos >= part.start) & (pos <= part.end):
-                        print(part)
                         results.append(pos - part.start + offset)
                     offset += len(part)
             else:
@@ -216,7 +214,7 @@ class genbank:
             return None, None
         features = self.get_thing(thing)
         if features.type == 'CDS':
-            print("we have CDS ...")
+            # print("we have CDS ...")
             transcript = self.get_transcript(thing)
             positions = self.get_position_in_transcript(pos)
             # prepare the triplets ...
