@@ -308,7 +308,7 @@ class genbank:
             location is intergenic a None value will be returned.
 
         """
-        triplet, tripos = genbank.get_triplet(position)
+        triplet, tripos = self.get_triplet(position)
         if triplet is None:
             return None
         mtriplet = genbank.get_variant_triplet(position, variant)
