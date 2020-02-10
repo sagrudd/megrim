@@ -141,7 +141,7 @@ class genbank:
             The position of the given base within the CDS.
 
         """
-        thing = genbank.what_is_at(pos)
+        thing = self.what_is_at(pos)
         if thing == genbank.INTERGENIC:
             return None
         features = self.get_thing(thing)
