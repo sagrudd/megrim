@@ -21,7 +21,7 @@ setuptools.setup(
                       'ipywidgets', 'matplotlib', 'pandas', 'numpy',
                       'pyranges', 'pysam', 'fontawesome', 'scipy', 
                       'dask[complete]', 'bamread', 'weightedcalcs',
-                      'biopython'],
+                      'biopython', 'ont_fast5_api'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
