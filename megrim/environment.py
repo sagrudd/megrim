@@ -22,6 +22,8 @@ import pathlib
 import sys
 import os
 import tempfile
+import pandas as pd
+from inspect import getframeinfo, currentframe, getouterframes
 
 
 class Flounder:
@@ -37,7 +39,7 @@ class Flounder:
     persistence of analysis states where possible
     """
 
-    def __init__(self, plot_width=640, plot_height=480, plot_type="native", 
+    def __init__(self, plot_width=640, plot_height=480, plot_type="native",
                  plot_tools="save,reset", plot_dpi=96):
         self.location = None
         self.results_dir = None
@@ -47,6 +49,7 @@ class Flounder:
         self.plot_tools = plot_tools
         self.plot_dpi = plot_dpi
         self.seq_sum = None
+        self.cache_path = "/tmp"
 
     def sync(self, new_me):
         new_me.set_path(self.get_path())
@@ -154,11 +157,124 @@ class Flounder:
                 elif f == "plot_dpi":
                     stuff.append(self.get_plot_dpi())
                 else:
-                    logging.warning("[%s] is an unknown and undefined variable" % (f))
+                    logging.warning(
+                        "[%s] is an unknown and undefined variable" % (f))
                     stuff.append(None)
         tres = tuple(stuff)
         logging.debug(tres)
         return tres
+
+    def get_cached_data(self, **kwargs):
+        """
+        Get project specific cached data if possible.
+
+        The Flounder cache aims to cache slow to compute data objects such
+        as BAM content, methylation signal etc etc. The method must be
+        provided with parameters that specify the method, filename source,
+        parameters and an exemplar object must be provided. The method can
+        currently only cache and uncache objects that correspond to
+        pandas.DataFrame
+
+        Parameters
+        ----------
+        **kwargs: dict
+            The dictionary object passed - must contain keys ["method",
+            "source", "parameters", "datatype"].
+
+        Raises
+        ------
+        ValueError
+            There is still a load of development to be done here - errors
+            will be fixed.
+
+        Returns
+        -------
+        depends on object
+            An object or None.
+
+        """
+        if all(["method" in kwargs.keys(),
+                "source" in kwargs.keys(),
+                "parameters" in kwargs.keys(),
+                "datatype" in kwargs.keys()]):
+            key = "{}.{}.{}".format(kwargs['method'],
+                                    os.path.basename(kwargs['source']),
+                                    kwargs['parameters'])
+            if isinstance(kwargs['datatype'], pd.DataFrame):
+                filename = os.path.join(self.cache_path, "{}.csv".format(key))
+                if not os.path.exists(filename):
+                    logging.debug("cache file does not exist ...")
+                    return None
+                return pd.read_csv(filename, sep="\t", index_col=0)
+            else:
+                raise ValueError(
+                    "No handler for processing datatype {}".format(
+                        type(kwargs['datatype'])))
+        raise ValueError("malformed cached_data request")
+
+    def set_cached_data(self, **kwargs):
+        """
+        Set project specific cached data if possible.
+
+        The Flounder cache aims to cache slow to compute data objects such
+        as BAM content, methylation signal etc etc. The method must be
+        provided with parameters that specify the method, filename source,
+        parameters and an exemplar object must be provided. The method can
+        currently only cache and uncache objects that correspond to
+        pandas.DataFrame
+
+        Parameters
+        ----------
+        **kwargs: dict
+            The dictionary object passed - must contain keys ["method",
+            "source", "parameters", "datatype"].
+
+        Raises
+        ------
+        ValueError
+            There is still a load of development to be done here - errors
+            will be fixed.
+
+        Returns
+        -------
+        depends on object
+            An object or None.
+
+        """
+        if all(["method" in kwargs.keys(),
+                "source" in kwargs.keys(),
+                "parameters" in kwargs.keys(),
+                "datatype" in kwargs.keys()]):
+            key = "{}.{}.{}".format(kwargs['method'],
+                                    os.path.basename(kwargs['source']),
+                                    kwargs['parameters'])
+
+            if isinstance(kwargs['datatype'], pd.DataFrame):
+                filename = os.path.join(self.cache_path, "{}.csv".format(key))
+                kwargs['datatype'].to_csv(filename, sep="\t")
+                return
+            else:
+                raise ValueError(
+                    "No handler for processing datatype {}".format(
+                        type(kwargs['datatype'])))
+        raise ValueError("malformed cached_data request")
+
+    def read_cache(self, source, object_example, *args):
+        return self.get_cached_data(
+            method=str(getframeinfo(currentframe().f_back).function),
+            source=source,
+            parameters="_".join(map(str, args)),
+            datatype=object_example)
+
+
+    def write_cache(self, source, object_example, *args):
+        return self.set_cached_data(
+            method=str(getframeinfo(currentframe().f_back).function),
+            source=source,
+            parameters="_".join(map(str, args)),
+            datatype=object_example)
+
+        
 
 def get_megrim_version():
     try:
@@ -229,3 +345,6 @@ def get_packaged_file_path():
 
     """
     return pathlib.Path(resource_filename('megrim', 'data'))
+
+
+
