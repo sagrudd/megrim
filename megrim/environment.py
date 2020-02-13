@@ -23,7 +23,8 @@ import sys
 import os
 import tempfile
 import pandas as pd
-from inspect import getframeinfo, currentframe, getouterframes
+from inspect import getframeinfo, currentframe
+import warnings
 
 
 class Flounder:
@@ -205,7 +206,10 @@ class Flounder:
                 if not os.path.exists(filename):
                     logging.debug("cache file does not exist ...")
                     return None
-                return pd.read_csv(filename, sep="\t", index_col=0)
+                with warnings.catch_warnings():
+                    warnings.simplefilter(
+                        action='ignore', category=FutureWarning)
+                    return pd.read_csv(filename, sep="\t", index_col=0)
             else:
                 raise ValueError(
                     "No handler for processing datatype {}".format(

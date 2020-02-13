@@ -27,6 +27,7 @@ class ReferenceGenome():
         self.fasta = FastaFile(filename=reference_fasta)
         self.allowed = []
         self.skipped = []
+        self.sequence_dict = {}
 
     def info(self):
         print(self.fasta.is_open())
@@ -66,8 +67,7 @@ class ReferenceGenome():
         chromosomes = self.get_chromosomes()
         starts = np.repeat(0, len(chromosomes))
         ends = self.get_chromosome_lengths(chromosomes)
-        gr = pr.PyRanges(chromosomes=chromosomes, starts=starts, ends=ends)
-        return gr
+        return pr.PyRanges(chromosomes=chromosomes, starts=starts, ends=ends)
 
     def skip_chromosome(self, chr):
         if not chr in self.skipped:
@@ -80,9 +80,50 @@ class ReferenceGenome():
     def get_skipped(self):
         print(" ".join(self.skipped))
 
+    def get_sequence(self, chromosome, start, end):
+        """
+        Given a chromosome id and positional coordinates return a seqeuence.
+        
+        Some methods require access to a DNA sequence. This may involve a
+        number of per-base operations or a single atomic write-type event;
+        the sequence will be parsed from the FASTA-format parent file,
+        cached in an internal dictionary and then processed for positional
+        context.
+
+        Parameters
+        ----------
+        chromosome: str
+            The chromosome id of interest.
+        start: int
+            The sequence start coordinate.
+        end: int
+            The sequence end coordinate.
+
+        Returns
+        -------
+        seq.
+
+        """
+        if not chromosome in self.sequence_dict.keys():
+            self._load_chromosome(chromosome)
+            
+    def _load_chromosome(self, chromosome):
+        print("loading chromosome {}".format(chromosome))
+        print(self.fasta.fetch(reference=chromosome))
+
     def get_tiled_genome(self, tile_size=100):
         return pr.gf.tile_genome(
             self.get_reference_ranges(), tile_size, tile_last=False)
+    
+    def get_tiled_chromosome(self, chromosome, tile_size=100):
+        return pr.gf.tile_genome(
+            pr.PyRanges(
+                chromosomes=[chromosome],
+                starts=[0],
+                ends=[self.get_chromosome_lengths([chromosome])[0]]),
+            tile_size,
+            tile_last=False)
+            
 
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)

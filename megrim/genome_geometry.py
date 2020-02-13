@@ -101,6 +101,10 @@ class BamHandler:
             result = None
         return result
 
+    def get_sam_core(self, chromosome, start, end):
+        annot = self.get_sam_reads(chromosome, start, end)
+        return annot
+
     def get_sam_annotation(self, chromosome, start, end):
         annot = self.get_sam_reads(chromosome, start, end)
         if annot is None:
@@ -116,7 +120,7 @@ class BamHandler:
         nm = []
         read_counter = 0
         for read in annot:
-            if not any([read.is_secondary, read.is_supplementary, 
+            if not any([read.is_secondary, read.is_supplementary,
                         read.is_qcfail, read.is_duplicate]):
                 read_counter += 1
                 start.append(read.reference_start)

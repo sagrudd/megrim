@@ -18,9 +18,13 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 import pandas as pd
 import glob
 from megrim.environment import Flounder
+from megrim.reference_genome import ReferenceGenome
+from megrim.genome_geometry import BamHandler
+from megrim.cigar import cigar_q_to_r
 import concurrent.futures
 from tqdm import tqdm
 import multiprocessing
+import sys
 
 
 def fast5_to_basemods(
@@ -210,10 +214,103 @@ def fast5s_to_basemods(
     return result
 
 
+
+def map_methylation_chunk(
+        ref, bam, f5path, chromosome, start, end, latest_basecall=None, 
+        modification="5mC", threshold=0.75, context="CG", force=False):
+    data = None
+    if (not force) & ("flounder" in globals()):
+        data = flounder.read_cache(
+            bam.bam, pd.DataFrame(), chromosome, start, end)
+    if data is None:
+        data = pd.DataFrame()
+        reads = bam.get_sam_core(chromosome, start, end)
+
+        for read in reads:
+            if not any([read.is_secondary, read.is_supplementary,
+                        read.is_qcfail, read.is_duplicate]):
+                row = pd.Series({"query_name": read.query_name,
+                                 "reference_name": read.reference_name,
+                                 "reference_start": read.reference_start,
+                                 "strand": "-" if read.is_reverse else "+",
+                                 "cigar": read.cigartuples})
+                data = data.append(row, ignore_index=True)
+
+        if "flounder" in globals():
+            flounder.write_cache(bam.bam, data, chromosome, start, end)
+            
+    data.set_index("query_name", drop=False, inplace=True)
+    #print(data)
+            
+    # layer on the base-modification content
+    files = glob.glob("{}/*.fast5".format(f5path))
+    for file in tqdm(files):
+        basemods = fast5_to_basemods(
+            file, latest_basecall=latest_basecall, modification=modification,
+            threshold=threshold, context=context, force=force)
+        basemods.set_index("read_id", drop=False, inplace=True)
+        
+        # identify the overlap in the data ...
+        join = data.join(basemods, how="inner")
+        # print(join)
+        
+        # and mung these data into the previous R format
+        def sync_bam_variant(row):
+            if row.strand=="+":
+                print("processing (+) - pos {} ".format(row.position))
+                operation, ref_pos = cigar_q_to_r(row.position, row.cigar)
+                ref_pos = ref_pos + row.reference_start
+                
+                # extract the corresponding nucleotide from the ref genome
+                
+                ref.get_sequence(chromosome, ref_pos, ref_pos)
+                
+                print(" {} -> {} {} ".format(row.position, operation, ref_pos))
+                
+                
+        join.apply(sync_bam_variant, axis=1)
+     
+        sys.exit(0)
+        
+    return data
+    
+
+def map_methylation(ref, bam, f5path):
+    
+    print("Mapping methylation ...")
+    print(ref)
+    print(bam)
+    print(ref.get_chromosome_lengths(["20:"])[0])
+    
+    for chromo in ref.get_chromosomes():
+        print(chromo)
+        chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=1000000)
+        for index in chromosome_tiles.df.index:
+            print(index)
+            mapped_reads = map_methylation_chunk(ref, bam, f5path,
+                chromosome=chromo, 
+                start=chromosome_tiles.df.iloc[index].Start,
+                end=chromosome_tiles.df.iloc[index].End)
+            print(mapped_reads)
+           
+                    
+                
+
+
 if __name__ == '__main__':
     flounder = Flounder()
     f5path = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/"
     # f5file = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/A1-D1-PAD851010.fast5"
     # print(fast5_to_basemods(f5file))
-    print(fast5s_to_basemods(f5path))
+    #print(fast5s_to_basemods(f5path))
+    reference = "/Volumes/Samsung_T5/MethylationPyTutorial/ReferenceData/human_g1k_v37.chr20.fasta"
+    reference = ReferenceGenome(reference)
+    
+    bam = "/Volumes/Samsung_T5/MethylationPyTutorial/Analysis/minimap2/Native.bam"
+    bam = BamHandler(bam)
+    
+    map_methylation(reference, bam, f5path)
+    
+    
+    
     
