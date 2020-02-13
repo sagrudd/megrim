@@ -15,6 +15,8 @@ import pandas as pd
 import logging
 import warnings
 import weightedcalcs as wc
+from Bio import SeqIO
+
 
 # from tqdm.auto import tqdm
 
@@ -106,10 +108,18 @@ class ReferenceGenome():
         """
         if not chromosome in self.sequence_dict.keys():
             self._load_chromosome(chromosome)
+        return self.sequence_dict[chromosome][int(start)]
             
     def _load_chromosome(self, chromosome):
-        print("loading chromosome {}".format(chromosome))
-        print(self.fasta.fetch(reference=chromosome))
+        print("loading chromosome {} from [{}]".format(
+            chromosome, self.fasta.filename))
+        #print(self.fasta.fetch(reference=chromosome))
+        with open(self.fasta.filename, "rU") as handle:
+            for record in SeqIO.parse(handle, "fasta"):
+                if record.id == chromosome:
+                    self.sequence_dict[chromosome]=record.seq
+                    return
+        raise ValueError("Chromosome [{}] not found".format(chromosome))
 
     def get_tiled_genome(self, tile_size=100):
         return pr.gf.tile_genome(
