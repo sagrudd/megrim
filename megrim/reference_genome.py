@@ -85,7 +85,7 @@ class ReferenceGenome():
     def get_sequence(self, chromosome, start, end):
         """
         Given a chromosome id and positional coordinates return a seqeuence.
-        
+
         Some methods require access to a DNA sequence. This may involve a
         number of per-base operations or a single atomic write-type event;
         the sequence will be parsed from the FASTA-format parent file,
@@ -106,18 +106,42 @@ class ReferenceGenome():
         seq.
 
         """
-        if not chromosome in self.sequence_dict.keys():
+        if chromosome not in self.sequence_dict.keys():
             self._load_chromosome(chromosome)
-        return self.sequence_dict[chromosome][int(start)]
-            
+        if start == end:
+            return self.sequence_dict[chromosome][int(start)]
+        else:
+            return self.sequence_dict[chromosome][int(start):int(end)]
+
     def _load_chromosome(self, chromosome):
-        print("loading chromosome {} from [{}]".format(
-            chromosome, self.fasta.filename))
-        #print(self.fasta.fetch(reference=chromosome))
+        """
+        __internal__ method to load a named chromsome into internal dict.
+
+        This method loads a chromsome sequence into internal dictionary using
+        the biopython seq methods.
+
+        Parameters
+        ----------
+        chromosome: Str
+            The name of the chromsome to load.
+
+        Raises
+        ------
+        ValueError
+            Will throw error if the named chromosome cannot be loaded.
+
+        Returns
+        -------
+        None.
+
+        """
+        # print("loading chromosome {} from [{}]".format(
+        #    chromosome, self.fasta.filename))
+        # print(self.fasta.fetch(reference=chromosome))
         with open(self.fasta.filename, "rU") as handle:
             for record in SeqIO.parse(handle, "fasta"):
                 if record.id == chromosome:
-                    self.sequence_dict[chromosome]=record.seq
+                    self.sequence_dict[chromosome] = record.seq
                     return
         raise ValueError("Chromosome [{}] not found".format(chromosome))
 
@@ -134,7 +158,6 @@ class ReferenceGenome():
             tile_size,
             tile_last=False)
             
-
     def get_tiled_coverage(self, bam_ranges, tile_size=100):
         return self.get_tiled_genome(tile_size=tile_size).coverage(bam_ranges)
 

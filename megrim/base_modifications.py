@@ -26,6 +26,7 @@ from tqdm import tqdm
 import multiprocessing
 import sys
 from Bio.Seq import Seq
+import hashlib
 
 
 def fast5_to_basemods(
@@ -215,29 +216,46 @@ def fast5s_to_basemods(
     return result
 
 
+def extract_bam_chunk(bam, chromosome, start, end, force=False):
+    """
+    Extract minimal bam associated annotation for given coordinates.
 
-def map_methylation_chunk(
-        ref, bam, f5path, chromosome, start, end, latest_basecall=None, 
-        modification="5mC", threshold=0.75, context="CG", force=False):
-    data = None
-    methylation_chunk = pd.DataFrame()
-    
-    # let's try to cache the result sets ..
+    This method will parse bamfile, bam, and return a pandas DataFrame
+    containing key observations to facilitate a base-modification workflow.
+
+    Parameters
+    ----------
+    bam: bam
+        An object of class bam.
+    chromosome: Str
+        The chromosome object of interest.
+    start: int
+        start position in chromosome.
+    end: int
+        The chromosomal end position
+    force: boolean, optional
+        Whether to force the analysis, or whether to allow for a cached result
+        to be returned. The default is False.
+
+    Returns
+    -------
+    data: pd.DataFrame
+        Pandas DataFrame containing the parsed entries.
+
+    """
+    # recover the cached data if possible
     if (not force) & ("flounder" in globals()):
-        methyl_chunk = flounder.read_cache(
-            bam.bam, pd.DataFrame(), "methyl_chunk", chromosome, start, end)
-        if methyl_chunk is not None:
-            return methyl_chunk
         data = flounder.read_cache(
             bam.bam, pd.DataFrame(), chromosome, start, end)
-
     if data is None:
         data = pd.DataFrame()
+        # extract reads from a bam file
         reads = bam.get_sam_core(chromosome, start, end)
-
         for read in reads:
+            # select primary mappings only
             if not any([read.is_secondary, read.is_supplementary,
                         read.is_qcfail, read.is_duplicate]):
+                # and select facets as required for basemodification workflow
                 row = pd.Series({"query_name": read.query_name,
                                  "query_length": read.query_length,
                                  "reference_name": read.reference_name,
@@ -245,45 +263,60 @@ def map_methylation_chunk(
                                  "strand": "-" if read.is_reverse else "+",
                                  "cigar": read.cigartuples})
                 data = data.append(row, ignore_index=True)
-
+        # prettify the data
+        data.set_index("query_name", drop=False, inplace=True)
         if "flounder" in globals():
             flounder.write_cache(bam.bam, data, chromosome, start, end)
+    return data
 
-    data.set_index("query_name", drop=False, inplace=True)
 
-    # layer on the base-modification content
-    files = glob.glob("{}/*.fast5".format(f5path))
-    for file in tqdm(files):
-        basemods = fast5_to_basemods(
-            file, latest_basecall=latest_basecall, modification=modification,
-            threshold=threshold, context=context, force=force)
-        basemods.set_index("read_id", drop=False, inplace=True)
+def sync_bam_variant(row, ref, chromosome, modification):
+    """
+    Sync a base-modification variant with FAST5 base modification data.
 
-        # identify the overlap in the data ...
-        join = data.join(basemods, how="inner")
+    Parameters
+    ----------
+    row : TYPE
+        DESCRIPTION.
+    ref : TYPE
+        DESCRIPTION.
+    chromosome : TYPE
+        DESCRIPTION.
+    modification : TYPE
+        DESCRIPTION.
 
-        # and mung these data into the previous R format
-        def sync_bam_variant(row):
-            # print(row)
-            if row.strand == "+":
-                # print("processing (+) - pos {} ".format(row.position))
-                operation, ref_pos = cigar_q_to_r(row.position, row.cigar)
-                ref_pos = ref_pos + row.reference_start
-                # extract the corresponding nucleotide from the ref genome
-                base = str(Seq(ref.get_sequence(
-                    chromosome, ref_pos, ref_pos)).complement())
-                # print line below (commented out) for debugging
-                # print(" {} -> {} {}  == {}".format(
-                #    row.position, operation, ref_pos, base))
-            else:  # maps to the reverse strand
-                # print("processing (-) - pos {} ".format(row.position))
-                # logic here is that the start of the read is upstream, need
-                # to adjust start and end coordinates ...
-                operation, ref_pos = cigar_q_to_r(
-                    (row.query_length - row.position - 2), row.cigar)
+    Returns
+    -------
+    results : TYPE
+        DESCRIPTION.
+
+    """
+    # print(row)
+    base = None
+    try:
+        if row.strand == "+":
+            # print("processing (+) - pos {} ".format(row.position))
+            operation, ref_pos = cigar_q_to_r(row.position, row.cigar)
+            ref_pos = ref_pos + row.reference_start
+            # extract the corresponding nucleotide from the ref genome
+            base = str(Seq(ref.get_sequence(
+                chromosome, ref_pos, ref_pos)).complement())
+            # print line below (commented out) for debugging
+            # print(" {} -> {} {}  == {}".format(
+            #    row.position, operation, ref_pos, base))
+        else:  # maps to the reverse strand
+            # print("processing (-) - pos {} ".format(row.position))
+            # logic here is that the start of the read is upstream, need
+            # to adjust start and end coordinates ...
+            pos = (row.query_length - row.position - 2)
+            # it is possible for a few reads that we have a 0 position - junk!
+            if pos > 0:
+                operation, ref_pos = cigar_q_to_r(pos, row.cigar)
                 ref_pos = ref_pos + row.reference_start
                 base = ref.get_sequence(chromosome, ref_pos, ref_pos)
-            # package the data for return - this is in ancestral R format
+
+        # package the data for return - this is in ancestral R format
+        if base is not None:
             results = pd.Series({"read_id": row.read_id,
                                  "pos": ref_pos,
                                  "fwd": int(row.strand == "+"),
@@ -296,32 +329,81 @@ def map_methylation_chunk(
                                  "prob": row[modification],
                                  "seq_context": row.contexts})
             return results
+    except Exception as ex:
+        print(str(ex))
+        print(row)
 
-        bam_mapped = pd.DataFrame(join.apply(sync_bam_variant, axis=1))
-        methylation_chunk = methylation_chunk.append(bam_mapped, sort=False)
+def layer_modifications_on_bam(
+        file, ref, data, chromosome, start, latest_basecall, modification,
+        threshold, context, force):
+    bam_mapped = None
+    if (not force) & ("flounder" in globals()):
+        bam_mapped = flounder.read_cache(
+            bam.bam, pd.DataFrame(), chromosome, start, 
+            hashlib.md5(file.encode()).hexdigest()[0:7])
+    if bam_mapped is None:
+        basemods = fast5_to_basemods(
+            file, latest_basecall=latest_basecall, modification=modification,
+            threshold=threshold, context=context, force=force)
+        basemods.set_index("read_id", drop=False, inplace=True)
 
-    # and cache the data ...
-    if "flounder" in globals():
-        flounder.write_cache(
+        # identify the overlap in the data ...
+        join = data.join(basemods, how="inner")
+
+        # and mung these data into the previous R format
+        bam_mapped = pd.DataFrame(
+            join.apply(
+                sync_bam_variant, axis=1, ref=ref, chromosome=chromosome,
+                modification=modification))
+        if "flounder" in globals():
+            flounder.write_cache(
+                bam.bam, pd.DataFrame(), chromosome, start, 
+                hashlib.md5(file.encode()).hexdigest()[0:7])
+    return bam_mapped
+
+def map_methylation_chunk(
+        ref, bam, f5path, chromosome, start, end, latest_basecall=None,
+        modification="5mC", threshold=0.75, context="CG", force=False):
+    methylation_chunk = None
+
+    # let's try to cache the result sets ..
+    if (not force) & ("flounder" in globals()):
+        methylation_chunk = flounder.read_cache(
             bam.bam, pd.DataFrame(), "methyl_chunk", chromosome, start, end)
+    if methylation_chunk is None:
+        methylation_chunk = pd.DataFrame()
+        # import the bam chunk
+        data = extract_bam_chunk(bam, chromosome, start, end, force)
+        # layer on the base-modification content
+        files = glob.glob("{}/*.fast5".format(f5path))
+        for file in tqdm(files):
+            bam_mapped = layer_modifications_on_bam(
+                file, ref, data, chromosome, start, latest_basecall,
+                modification, threshold, context, force)
+            methylation_chunk = methylation_chunk.append(
+                bam_mapped, sort=False)
+        # and cache the data ...
+        if "flounder" in globals():
+            flounder.write_cache(bam.bam, pd.DataFrame(), "methyl_chunk",
+                                 chromosome, start, end)
 
     return methylation_chunk
     
 
+
 def map_methylation(ref, bam, f5path):
-    
     print("Mapping methylation ...")
     print(ref)
     print(bam)
     print(ref.get_chromosome_lengths(["20:"])[0])
-    
+
     for chromo in ref.get_chromosomes():
         print(chromo)
         chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=1000000)
         for index in chromosome_tiles.df.index:
             print(index)
             mapped_reads = map_methylation_chunk(ref, bam, f5path,
-                chromosome=chromo, 
+                chromosome=chromo,
                 start=chromosome_tiles.df.iloc[index].Start,
                 end=chromosome_tiles.df.iloc[index].End)
             print(mapped_reads)
