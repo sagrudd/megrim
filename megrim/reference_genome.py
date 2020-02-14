@@ -113,6 +113,12 @@ class ReferenceGenome():
         else:
             return self.sequence_dict[chromosome][int(start):int(end)]
 
+
+    def get_whole_sequence(self, chromosome):
+        if chromosome not in self.sequence_dict.keys():
+            self._load_chromosome(chromosome)
+        return self.sequence_dict[chromosome]
+
     def _load_chromosome(self, chromosome):
         """
         __internal__ method to load a named chromsome into internal dict.

@@ -87,3 +87,25 @@ def cigar_q_to_r(poi, cigar_tuple):
         return m_matches["operation"][idx], m_matches["r_posn"][idx]
     idx = matches.index[0]
     return matches["operation"][idx], matches["r_posn"][idx]
+
+
+
+class cigar_rle:
+    
+    def __init__(self, cigar_tuple):
+        self.pmap = build_position_map(cigar_tuple)
+        
+    def q_to_r(self, poi):
+        matches = self.pmap[self.pmap.q_posn == poi]
+        if len(matches.index) > 1:
+            m_matches = matches[matches.operation == "M"]
+            if len(m_matches.index) != 1:
+                print(matches)
+                raise ValueError("The SAM coordinates are beyond experience")
+            idx = m_matches.index[0]
+            return m_matches["operation"][idx], m_matches["r_posn"][idx]
+        idx = matches.index[0]
+        return matches["operation"][idx], matches["r_posn"][idx]
+        
+        
+
