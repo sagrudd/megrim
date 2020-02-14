@@ -85,60 +85,68 @@ def fast5_to_basemods(
                 latest_basecall = read.get_latest_analysis("Basecall_1D")
                 # print(latest_basecall)
 
-            mod_base_df = pd.DataFrame(
-                data=read.get_analysis_dataset(
-                    latest_basecall,
-                    "BaseCalled_template/ModBaseProbs"),
-                columns=["A", "6mA", "C", "5mC", "G", "T"])
-            mod_base_df['position'] = mod_base_df.index
-            mod_base_df['read_id'] = read_id
-
-            # reduce the data by modification and probability threshold
-            mod_base_df[modification] = mod_base_df[modification] / 255
-            mod_base_df = mod_base_df.loc[
-                mod_base_df[modification] > threshold,
-                ["read_id", "position", modification]]
-
-            # reduce by local sequence context
-            fastq = read.get_analysis_dataset(
-                latest_basecall, "BaseCalled_template/Fastq")
-            sequence = fastq.splitlines()[1]
-
-            # instead of just a lambda function, this is a little over-
-            # engineered; expecting more interesting IUPAC based contexts in
-            # future
-            def is_context(row):
-                position = row.position
-                localcontext = sequence[position:position+len(context)]
-                if localcontext == context:
-                    return True
-                return False
-
-            def get_context(row, width=5):
-                position = row.position
-                start = position-width
-                if start < 0:
-                    start = 0
-                end = position+len(context)+width
-                if end >= len(fastq):
-                    end = len(fastq)-1
-                return sequence[start: end]
-
-            if len(mod_base_df.index) > 0:
-                contextful = mod_base_df.apply(is_context, axis=1)
-                mod_base_df = mod_base_df[contextful]
-
-            # finally augment the tabular data with actual sequence context
-            if len(mod_base_df.index) > 0:
-                mod_base_df["contexts"] = mod_base_df.apply(
-                    get_context, axis=1)
-
+            mod_base_df = fast5_basemods_to_df(
+                read, latest_basecall, modification, threshold, context)
             result = result.append(mod_base_df, sort=False)
 
     if "flounder" in globals():
         flounder.write_cache(
             fast5file, result, modification, threshold, context)
     return result
+
+
+def fast5_basemods_to_df(
+        read, latest_basecall, modification, threshold, context):
+    mod_base_df = pd.DataFrame(
+        data=read.get_analysis_dataset(
+            latest_basecall,
+            "BaseCalled_template/ModBaseProbs"),
+        columns=["A", "6mA", "C", "5mC", "G", "T"])
+    mod_base_df['position'] = mod_base_df.index
+    mod_base_df['read_id'] = read.read_id
+
+    # reduce the data by modification and probability threshold
+    mod_base_df[modification] = mod_base_df[modification] / 255
+    mod_base_df = mod_base_df.loc[
+        mod_base_df[modification] > threshold,
+        ["read_id", "position", modification]]
+
+    # reduce by local sequence context
+    fastq = read.get_analysis_dataset(
+        latest_basecall, "BaseCalled_template/Fastq")
+    sequence = fastq.splitlines()[1]
+
+    # instead of just a lambda function, this is a little over-
+    # engineered; expecting more interesting IUPAC based contexts in
+    # future
+    def is_context(row):
+        position = row.position
+        localcontext = sequence[position:position+len(context)]
+        if localcontext == context:
+            return True
+        return False
+
+    def get_context(row, width=5):
+        position = row.position
+        start = position-width
+        if start < 0:
+            start = 0
+        end = position+len(context)+width
+        if end >= len(fastq):
+            end = len(fastq)-1
+        return sequence[start: end]
+
+    if len(mod_base_df.index) > 0:
+        contextful = mod_base_df.apply(is_context, axis=1)
+        mod_base_df = mod_base_df[contextful]
+
+    # finally augment the tabular data with actual sequence context
+    if len(mod_base_df.index) > 0:
+        mod_base_df["contexts"] = mod_base_df.apply(
+            get_context, axis=1)
+    return mod_base_df
+
+
 
 
 def fast5s_to_basemods(
@@ -333,13 +341,14 @@ def sync_bam_variant(row, ref, chromosome, modification):
         print(str(ex))
         print(row)
 
+
 def layer_modifications_on_bam(
         file, ref, data, chromosome, start, latest_basecall, modification,
         threshold, context, force):
     bam_mapped = None
     if (not force) & ("flounder" in globals()):
         bam_mapped = flounder.read_cache(
-            bam.bam, pd.DataFrame(), chromosome, start, 
+            bam.bam, pd.DataFrame(), chromosome, start,
             hashlib.md5(file.encode()).hexdigest()[0:7])
     if bam_mapped is None:
         basemods = fast5_to_basemods(
@@ -357,11 +366,12 @@ def layer_modifications_on_bam(
                 modification=modification))
         if "flounder" in globals():
             flounder.write_cache(
-                bam.bam, pd.DataFrame(), chromosome, start, 
+                bam.bam, pd.DataFrame(), chromosome, start,
                 hashlib.md5(file.encode()).hexdigest()[0:7])
     return bam_mapped
 
-def map_methylation_chunk(
+
+def old_map_methylation_chunk(
         ref, bam, f5path, chromosome, start, end, latest_basecall=None,
         modification="5mC", threshold=0.75, context="CG", force=False):
     methylation_chunk = None
@@ -386,9 +396,161 @@ def map_methylation_chunk(
         if "flounder" in globals():
             flounder.write_cache(bam.bam, pd.DataFrame(), "methyl_chunk",
                                  chromosome, start, end)
-
     return methylation_chunk
-    
+
+
+
+
+def fast5_indexer(fast5file):
+    fast5_index = pd.DataFrame()
+    with get_fast5_file(fast5file, mode="r") as f5:
+        for read_id in f5.get_read_ids():
+            row = pd.Series({"fast5file": fast5file, "read_id": read_id})
+            fast5_index = fast5_index.append(row, ignore_index=True)
+    return fast5_index
+
+
+def index_fast5_content(f5path, force=False, processes=8):
+    files = glob.glob("{}/*.fast5".format(f5path))
+    fast5_index = None
+    hashstr = hashlib.md5("".join(files).encode()).hexdigest()
+    if (not force) & ("flounder" in globals()):
+        fast5_index = flounder.read_cache(
+            f5path, pd.DataFrame(), hashstr)
+    if fast5_index is None:
+        print("indexing fast5 content")
+        fast5_index = pd.DataFrame()
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as pool:
+            future_fast5 = {
+                pool.submit(fast5_indexer, fast5file=file):
+                    file for file in files
+                    }
+            for future in tqdm(
+                concurrent.futures.as_completed(future_fast5),
+                total=len(files)):
+
+                index = future.result()
+                fast5_index = fast5_index.append(index, ignore_index=True)
+
+        if "flounder" in globals():
+            flounder.write_cache(f5path, fast5_index, hashstr)
+    return fast5_index
+
+
+
+def extract_f5_basemods(multiindex, bam_chunk, ref_filename, chromosome, modification, threshold, context):
+    ref = ReferenceGenome(ref_filename)
+    multiresult = None
+
+    for index in multiindex:
+        row = bam_chunk.loc[index]
+        # print("processing {}".format(index))
+
+        with get_fast5_file(row.fast5file, mode="r") as f5:
+            read = f5.get_read(row.name)
+            latest_basecall = read.get_latest_analysis("Basecall_1D")
+
+            mod_base_df = fast5_basemods_to_df(
+                read, latest_basecall, modification, threshold,
+                context)
+
+            mod_base_df.set_index("read_id", drop=False, inplace=True)
+            mod_base_df['strand'] = row.strand
+            mod_base_df['query_length'] = row.query_length
+            mod_base_df['cigar'] = row.cigar
+            mod_base_df['reference_start'] = row.reference_start
+
+            # print(mod_base_df.drop(["cigar"], axis=1))
+            # identify the overlap in the data ...
+
+            # and mung these data into the previous R format
+            bam_mapped = pd.DataFrame(
+                mod_base_df.apply(
+                    sync_bam_variant, axis=1, ref=ref,
+                    chromosome=chromosome,
+                    modification=modification))
+
+            if not bam_mapped.empty:
+                # print(bam_mapped)
+                if multiresult is None:
+                    multiresult = bam_mapped
+                else:
+                    multiresult = pd.concat([multiresult, bam_mapped], ignore_index=True)
+                # multiresult.append(bam_mapped, sort=False)
+            
+    # print(multiresult)
+    return multiresult
+
+
+def map_methylation_chunk(
+        ref, bam, f5index, chromosome, start, end, latest_basecall=None,
+        modification="5mC", threshold=0.75, context="CG", force=False):
+    methylation_chunk = None
+
+    # let's try to cache the result sets ..
+    if (not force) & ("flounder" in globals()):
+        methylation_chunk = flounder.read_cache(
+            bam.bam, pd.DataFrame(), "methyl_chunk", chromosome, start, end)
+    if methylation_chunk is None:
+        methylation_chunk = pd.DataFrame()
+        # import the bam chunk
+        bam_chunk = extract_bam_chunk(bam, chromosome, start, end, force)
+
+        bam_chunk["fast5file"] = f5index.loc[bam_chunk.index]["fast5file"]
+
+        # ProcessPoolExecutor appears to have limits for # of tasks ...
+        items = len(bam_chunk.index)
+        chunk_list = bam_chunk.index.tolist()
+        chunksize = 25
+        if items > 10000:
+            chunksize = 250
+
+        def chunk(lst, n):
+            n = max(1, n)
+            return (lst[i:i + n] for i in range(0, len(lst), n))
+
+        chunks = chunk(chunk_list, chunksize)
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=5) as pool:
+            
+            future_list = {pool.submit(
+                extract_f5_basemods, chunk_, bam_chunk.loc[chunk_], 
+                ref.fasta.filename, chromosome=chromosome, 
+                modification=modification, threshold=threshold, 
+                context=context):
+                    chunk_ for chunk_ in chunks}
+            
+            print("future list has {} members".format(len(future_list)))
+            for future in tqdm(concurrent.futures.as_completed(future_list),
+                               total=len(future_list)):
+                
+                bam_mapped = future.result()
+                methylation_chunk = methylation_chunk.append(bam_mapped, sort=False)
+                
+            #     
+            #     methylation_chunk = methylation_chunk.append(
+            #         bam_mapped, sort=False)
+                
+            # and harvest the items ...
+                
+        
+        # for item in bam_chunk.index:
+        #     row = bam_chunk.loc[item]
+        #     f5file = f5index.loc[item]["fast5file"]
+        #     extract_f5basemods(
+        #         f5file, row, chromosome, ref, modification=modification,
+        #         threshold=threshold, context=context)
+        
+        print(methylation_chunk)
+        sys.exit(0)
+            
+        
+        if "flounder" in globals():
+            flounder.write_cache(bam.bam, pd.DataFrame(), "methyl_chunk",
+                                 chromosome, start, end)
+    return methylation_chunk
+
 
 
 def map_methylation(ref, bam, f5path):
@@ -400,9 +562,11 @@ def map_methylation(ref, bam, f5path):
     for chromo in ref.get_chromosomes():
         print(chromo)
         chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=1000000)
+        f5index = index_fast5_content(f5path)
+        f5index.set_index("read_id", drop=False, inplace=True)
         for index in chromosome_tiles.df.index:
             print(index)
-            mapped_reads = map_methylation_chunk(ref, bam, f5path,
+            mapped_reads = map_methylation_chunk(ref, bam, f5index,
                 chromosome=chromo,
                 start=chromosome_tiles.df.iloc[index].Start,
                 end=chromosome_tiles.df.iloc[index].End)
@@ -417,12 +581,17 @@ if __name__ == '__main__':
     f5path = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/"
     # f5file = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/A1-D1-PAD851010.fast5"
     # print(fast5_to_basemods(f5file))
-    #print(fast5s_to_basemods(f5path))
+    print(fast5s_to_basemods(f5path))
+    sys.exit(0)
     reference = "/Volumes/Samsung_T5/MethylationPyTutorial/ReferenceData/human_g1k_v37.chr20.fasta"
     reference = ReferenceGenome(reference)
     
     bam = "/Volumes/Samsung_T5/MethylationPyTutorial/Analysis/minimap2/Native.bam"
     bam = BamHandler(bam)
+    
+    pd.set_option("display.max_columns", None)
+    pd.set_option("display.expand_frame_repr", False)
+    pd.set_option("max_colwidth", -1)
     
     map_methylation(reference, bam, f5path)
     
