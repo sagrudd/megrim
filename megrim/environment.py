@@ -209,7 +209,8 @@ class Flounder:
                 with warnings.catch_warnings():
                     warnings.simplefilter(
                         action='ignore', category=FutureWarning)
-                    return pd.read_csv(filename, sep="\t", index_col=0)
+                    return pd.read_csv(
+                        filename, sep="\t", index_col=0, low_memory=False)
             else:
                 raise ValueError(
                     "No handler for processing datatype {}".format(
