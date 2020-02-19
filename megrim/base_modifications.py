@@ -28,6 +28,7 @@ import sys
 from Bio.Seq import Seq
 import hashlib
 import traceback
+from operator import itemgetter
 
 
 def fast5_to_basemods(
@@ -380,8 +381,6 @@ def mung_bam_variant(rows, ref, chromosome):
                     operation, ref_pos = cigar_rles[row.read_id].q_to_r(pos)
                     ref_pos = ref_pos + row.reference_start
                     ######### base = ref[int(ref_pos)]
-    
-            base = "C"
             
             # package the data for return - this is in ancestral R format
             if ref_pos is not None:
@@ -399,10 +398,6 @@ def mung_bam_variant(rows, ref, chromosome):
                                      "fwd": int(row.strand == "+"),
                                      "rev": int(row.strand == "-"),
                                      "op": operation,
-                                     "A": int(base == "A"),
-                                     "C": int(base == "C"),
-                                     "G": int(base == "G"),
-                                     "T": int(base == "T"),
                                      "prob": row[modification],
                                      "seq_context": row.contexts})
                 return results
@@ -460,21 +455,57 @@ def map_methylation_signal_chunk(
     return methylation_chunk
 
 
-def map_methylation_signal(ref, bam, modifications):
+def map_methylation_signal(ref, bam, modifications, force=False):
     print("Mapping methylation signals")
-    mapped_reads = []
-    for chromo in ref.get_chromosomes():
-        print(chromo)
-        chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=5000000)
-        for index in chromosome_tiles.df.index:
-            print(index)
-            mapped_read_chunk = map_methylation_signal_chunk(
-                ref, bam, modifications,
-                chromosome=chromo,
-                start=chromosome_tiles.df.iloc[index].Start,
-                end=chromosome_tiles.df.iloc[index].End)
-            mapped_reads.append(mapped_read_chunk)               
-    mapped_reads = pd.concat(mapped_reads)
+    
+    if (not force) & ("flounder" in globals()):
+        mapped_reads = flounder.read_cache(
+            bam.bam, pd.DataFrame(), "proof-of-concept")
+    if mapped_reads is None:
+        mapped_reads = []
+        for chromo in ref.get_chromosomes():
+            print(chromo)
+            chr_mapped_reads = []
+            chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=5000000)
+            for index in chromosome_tiles.df.index:
+                print(index)
+                mapped_read_chunk = map_methylation_signal_chunk(
+                    ref, bam, modifications,
+                    chromosome=chromo,
+                    start=chromosome_tiles.df.iloc[index].Start,
+                    end=chromosome_tiles.df.iloc[index].End)
+                chr_mapped_reads.append(mapped_read_chunk)
+            chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
+            # the reference base calling was dropped earlier due to resources
+            # and parallelisation - let's put back the reference bases ...
+            chr_mapped_reads = chr_mapped_reads.loc[chr_mapped_reads.pos.notna()]
+            chr_mapped_reads.pos = chr_mapped_reads.pos.astype(int)
+            chr_mapped_reads.drop(["0"], axis=1, inplace=True)
+            fasta = list(ref.get_whole_sequence(chromo))
+            print("picking bases")
+            # bases = itemgetter(chr_mapped_reads.pos.tolist())(fasta)
+            bases = [fasta[x] for x in chr_mapped_reads.pos.tolist()]
+            print("There are {} bases called - ".format(len(bases)))
+            print("setting bases")
+            chr_mapped_reads['ref_base'] = bases
+            # due to the way that the parse was performed there were duplicates
+            # introduced ... remove the duplicates ...
+            chr_mapped_reads.drop_duplicates(
+                subset=["chromosome", "pos", "prob", "read_id"], inplace=True)
+            # and replace the base enumerations
+            chr_mapped_reads['A'] = 0
+            chr_mapped_reads['C'] = 0
+            chr_mapped_reads['G'] = 0
+            chr_mapped_reads['T'] = 0
+            chr_mapped_reads.loc[chr_mapped_reads.ref_base == "A", "A"] = 1
+            chr_mapped_reads.loc[chr_mapped_reads.ref_base == "C", "C"] = 1
+            chr_mapped_reads.loc[chr_mapped_reads.ref_base == "G", "G"] = 1
+            chr_mapped_reads.loc[chr_mapped_reads.ref_base == "T", "T"] = 1
+            mapped_reads.append(chr_mapped_reads)
+        mapped_reads = pd.concat(mapped_reads)
+        if "flounder" in globals():
+            flounder.write_cache(
+                bam.bam, mapped_reads, "proof-of-concept")
     print(mapped_reads)
 
 
