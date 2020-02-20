@@ -12,6 +12,8 @@ from megrim.environment import MegrimPlugin
 import argparse
 from importlib import reload
 import logging
+from megrim.environment import Flounder
+import tempfile
         
 
 class MegrimToolBox:
@@ -86,7 +88,7 @@ def main():
     subparsers.dest = 'method'
 
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_help = False
+    parent_parser.add_argument('--cache', metavar="/tmp", action='store', help='Path to location for storing cached and temporary files.', dest="cache", default=tempfile.gettempdir())
 
     megrim_plugins.arg_params(subparsers, parent_parser)
 
@@ -94,4 +96,10 @@ def main():
                         help="increase output verbosity")
 
     args = parser.parse_args()
+
+    # setup a Flounder for this workflow ...
+    flounder = Flounder()
+    flounder.cache_path = args.cache
+    print(flounder.cache_path)
+
     megrim_plugins.execute(args)
