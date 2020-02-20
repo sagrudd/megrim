@@ -17,9 +17,10 @@ setuptools.setup(
         'megrim': ['data/ONT_logo.png', 'data/FontAwesome5Free-Solid-900.otf']
     },
     include_package_data=True,
-    install_requires=['datetime', 'pytz', 'progressbar', 'tqdm', 'ipython', 
+    entry_points={'console_scripts': ["megrim=megrim.toolbox:main"]},
+    install_requires=['datetime', 'pytz', 'progressbar', 'tqdm', 'ipython',
                       'ipywidgets', 'matplotlib', 'pandas', 'numpy',
-                      'pyranges', 'pysam', 'fontawesome', 'scipy', 
+                      'pyranges', 'pysam', 'fontawesome', 'scipy',
                       'dask[complete]', 'bamread', 'weightedcalcs',
                       'biopython', 'ont_fast5_api'],
     classifiers=[
