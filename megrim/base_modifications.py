@@ -25,10 +25,10 @@ import concurrent.futures
 from tqdm import tqdm
 import multiprocessing
 import sys
-from Bio.Seq import Seq
 import hashlib
 import traceback
-from operator import itemgetter
+import numpy as np
+from Bio.Seq import Seq
 
 
 def fast5_to_basemods(
@@ -128,7 +128,7 @@ def fast5_basemods_to_df(
             return True
         return False
 
-    def get_context(row, width=5):
+    def get_context(row, width=6):
         position = row.position
         start = position-width
         if start < 0:
@@ -136,7 +136,9 @@ def fast5_basemods_to_df(
         end = position+len(context)+width
         if end >= len(fastq):
             end = len(fastq)-1
-        return sequence[start: end]
+        return "{}[{}]{}".format(sequence[start: (position)],
+                                 sequence[position: (position+len(context))],
+                                 sequence[(position+len(context)): end])
 
     if len(mod_base_df.index) > 0:
         contextful = mod_base_df.apply(is_context, axis=1)
@@ -146,6 +148,7 @@ def fast5_basemods_to_df(
     if len(mod_base_df.index) > 0:
         mod_base_df["contexts"] = mod_base_df.apply(
             get_context, axis=1)
+    # print(mod_base_df) # for logging/validation purposes only
     return mod_base_df
 
 
@@ -325,7 +328,7 @@ def index_fast5_content(f5path, force=False, processes=8):
     return fast5_index   
     
     
-def mung_bam_variant(rows, ref, chromosome):
+def mung_bam_variant(rows, chromosome, monly=True):
     """
     Sync a base-modification variant with FAST5 base modification data.
 
@@ -346,27 +349,24 @@ def mung_bam_variant(rows, ref, chromosome):
         DESCRIPTION.
 
     """
-    
     cigar_rles = {}
 
-
     def internal_function(row):
-        
-        if not row.read_id in cigar_rles.keys():
+        if row.read_id not in cigar_rles.keys():
             cigar_rles[row.read_id] = cigar_rle(row.cigar)
-        
+
         try:
-            operation = None 
+            operation = None
             ref_pos = None
             if row.strand == "+":
                 # print("processing (+) - pos {} ".format(row.position))
                 # operation, ref_pos = cigar_q_to_r(row.position, row.cigar)
                 if row.position >= 1:
                     # this is a strange edge case ...
-                    operation, ref_pos = cigar_rles[row.read_id].q_to_r(row.position)
+                    operation, ref_pos = cigar_rles[row.read_id].q_to_r(
+                        row.position)
                     ref_pos = ref_pos + row.reference_start
                 # extract the corresponding nucleotide from the ref genome
-                ####### base = str(Seq(ref[int(ref_pos)]).complement())
                 # print line below (commented out) for debugging
                 # print(" {} -> {} {}  == {}".format(
                 #    row.position, operation, ref_pos, base))
@@ -374,33 +374,33 @@ def mung_bam_variant(rows, ref, chromosome):
                 # print("processing (-) - pos {} ".format(row.position))
                 # logic here is that the start of the read is upstream, need
                 # to adjust start and end coordinates ...
-                pos = (row.query_length - row.position - 2)
-                # it is possible for a few reads that we have a 0 position - junk!
+                pos = (row.query_length - row.position - 1)
+                # it is possible for reads that have a 0 position = junk!
                 if pos > 0:
                     # operation, ref_pos = cigar_q_to_r(pos, row.cigar)
                     operation, ref_pos = cigar_rles[row.read_id].q_to_r(pos)
                     ref_pos = ref_pos + row.reference_start
-                    ######### base = ref[int(ref_pos)]
-            
             # package the data for return - this is in ancestral R format
             if ref_pos is not None:
-                modification = None
-                if "5mC" in row.index:
-                    modification = "5mC"
-                elif "6mA" in row.index:
-                    modification = "6mA"
-                else:
-                    raise ValueError("Suitable modification column not found")
-    
-                results = pd.Series({"read_id": row.read_id,
-                                     "chromosome": chromosome,
-                                     "pos": ref_pos,
-                                     "fwd": int(row.strand == "+"),
-                                     "rev": int(row.strand == "-"),
-                                     "op": operation,
-                                     "prob": row[modification],
-                                     "seq_context": row.contexts})
-                return results
+                # if the operation is M ...
+                if (monly and operation == "M") or not monly:
+                    modification = None
+                    if "5mC" in row.index:
+                        modification = "5mC"
+                    elif "6mA" in row.index:
+                        modification = "6mA"
+                    else:
+                        raise ValueError(
+                            "Suitable modification column not found")
+                    results = pd.Series({"read_id": row.read_id,
+                                         "chromosome": chromosome,
+                                         "pos": ref_pos,
+                                         "fwd": int(row.strand == "+"),
+                                         "rev": int(row.strand == "-"),
+                                         "op": operation,
+                                         "prob": row[modification],
+                                         "seq_context": row.contexts})
+                    return results
         except Exception as ex:
             print(str(ex))
             print(ex)
@@ -409,37 +409,61 @@ def mung_bam_variant(rows, ref, chromosome):
             traceback.print_exc()
             sys.exit(0)
 
-    results_df = pd.DataFrame(rows.apply(internal_function, axis=1))
-    # print(results_df)
-    return results_df
+    apply_data = rows.apply(internal_function, axis=1).dropna()
+    # if first row of apply results in a None ... we're stuck with Series
+    if isinstance(apply_data, pd.Series):
+        apply_data = pd.DataFrame(
+            [item for item in apply_data],
+            columns=["read_id", "chromosome", "pos", "fwd", "rev", "op",
+                     "prob", "seq_context"])
+        apply_data.set_index("read_id", drop=False, inplace=True)
+    # apply_data = apply_data.astype(
+    #     dtype={"pos": "int32", "fwd": "int32",
+    #            "rev": "int32", "prob": "float32"})
+    return apply_data
 
-    
+
 def map_methylation_signal_chunk(
-        ref, bam, modifications, chromosome, start, end, force=False):
+        ref, bam, modifications, chromosome, start, end, force=False, processes=None):
 
+    data_hash = hashlib.md5(
+        str(
+            len(modifications.index)).join(
+                modifications.index.unique()).encode()).hexdigest()[0:7]
+    idx_hash = hashlib.md5(
+        "_".join([chromosome, str(start), str(end)]).encode()).hexdigest()[0:7]
+    
     if (not force) & ("flounder" in globals()):
         methylation_chunk = flounder.read_cache(
-            bam.bam, pd.DataFrame(), chromosome, start, end)
+            bam.bam, pd.DataFrame(), data_hash, idx_hash)
 
     if methylation_chunk is None:
+        if processes is None:
+            processes = multiprocessing.cpu_count()
+        
         methylation_chunk = []
         # import the bam chunk
         bam_chunk = extract_bam_chunk(bam, chromosome, start, end, force)
 
         # perform an inner join on the datasets ...
         bam_chunk = bam_chunk.join(modifications, how="inner")
-        with concurrent.futures.ProcessPoolExecutor(max_workers=8) as pool:
+        with concurrent.futures.ProcessPoolExecutor(
+                max_workers=processes) as pool:
             future_list = []
+            # counter = 0
             keys = bam_chunk["read_id"].unique()
             for key in keys:
                 read_chunk = bam_chunk.loc[key]
                 if isinstance(read_chunk, pd.Series):
                     read_chunk = pd.DataFrame(read_chunk).T
 
+                # mung_bam_variant(read_chunk, chromosome=chromosome)
+                # counter += 1
+                # if counter > 10:
+                #     sys.exit(0)
                 future = pool.submit(
                     mung_bam_variant,
                     read_chunk,
-                    ref="X",  # ref.get_whole_sequence(chromosome),
                     chromosome=chromosome)
                 future_list.append(future)
             # print("future list has {} members".format(len(future_list)))
@@ -451,16 +475,21 @@ def map_methylation_signal_chunk(
         methylation_chunk = pd.concat(methylation_chunk)
         if "flounder" in globals():
             flounder.write_cache(
-                bam.bam, methylation_chunk, chromosome, start, end)
+                bam.bam, methylation_chunk, data_hash, idx_hash)
     return methylation_chunk
 
 
 def map_methylation_signal(ref, bam, modifications, force=False):
     print("Mapping methylation signals")
     
+    data_hash = hashlib.md5(
+        str(
+            len(modifications.index)).join(
+                modifications.index.unique()).encode()).hexdigest()
+    
     if (not force) & ("flounder" in globals()):
         mapped_reads = flounder.read_cache(
-            bam.bam, pd.DataFrame(), "proof-of-concept")
+            bam.bam, pd.DataFrame(), data_hash)
     if mapped_reads is None:
         mapped_reads = []
         for chromo in ref.get_chromosomes():
@@ -478,9 +507,13 @@ def map_methylation_signal(ref, bam, modifications, force=False):
             chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
             # the reference base calling was dropped earlier due to resources
             # and parallelisation - let's put back the reference bases ...
-            chr_mapped_reads = chr_mapped_reads.loc[chr_mapped_reads.pos.notna()]
-            chr_mapped_reads.pos = chr_mapped_reads.pos.astype(int)
-            chr_mapped_reads.drop(["0"], axis=1, inplace=True)
+            chr_mapped_reads = chr_mapped_reads.loc[
+                chr_mapped_reads.pos.notna()]
+            chr_mapped_reads = chr_mapped_reads.astype(
+                dtype={"pos": "int32", "fwd": "int32",
+                       "rev": "int32", "prob": "float32"})
+            print(chr_mapped_reads)
+            
             fasta = list(ref.get_whole_sequence(chromo))
             print("picking bases")
             # bases = itemgetter(chr_mapped_reads.pos.tolist())(fasta)
@@ -505,8 +538,30 @@ def map_methylation_signal(ref, bam, modifications, force=False):
         mapped_reads = pd.concat(mapped_reads)
         if "flounder" in globals():
             flounder.write_cache(
-                bam.bam, mapped_reads, "proof-of-concept")
-    print(mapped_reads)
+                bam.bam, mapped_reads, data_hash)
+    return mapped_reads
+
+
+def reduce_mapped_methylation_signal(dataframe, force=False):
+    print("reduce_mapped_methylation_signal")
+    print("...")
+    data_hash = hashlib.md5(
+        str(
+            len(dataframe.index)).join(
+                dataframe.index.unique()).encode()).hexdigest()
+    df = None
+    if (not force) & ("flounder" in globals()):
+        df = flounder.read_cache(
+            data_hash, pd.DataFrame())
+    if df is None:
+        df = dataframe.groupby(["chromosome", "pos"]).agg(
+                {"chromosome": "first", "pos": "first", "prob": np.mean,
+                 "fwd": np.sum, "rev": np.sum, "seq_context": "first",
+                 "ref_base": "first"})
+        if "flounder" in globals():
+            flounder.write_cache(
+                data_hash, df)
+    return df
 
 
 if __name__ == '__main__':
@@ -536,7 +591,10 @@ if __name__ == '__main__':
     pd.set_option("max_colwidth", -1)
 
     # associated mapped bases with the available modifications
-    map_methylation_signal(reference, bam, modifications)
+    mapped_reads = map_methylation_signal(reference, bam, modifications)
+    print(mapped_reads)
+    reduced_reads = reduce_mapped_methylation_signal(mapped_reads)
+    print(reduced_reads)
     
     
     
