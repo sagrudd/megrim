@@ -352,4 +352,17 @@ def get_packaged_file_path():
     return pathlib.Path(resource_filename('megrim', 'data'))
 
 
+class MegrimPlugin:
+
+    def __init__(self):
+        self.tool = "toolname"
+
+    def execute(self, args):
+        raise NotImplementedError
+
+    def arg_params(self, subparsers, parent_parser):
+        raise NotImplementedError
+
+
+
 
