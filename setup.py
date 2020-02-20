@@ -12,7 +12,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/sagrudd/megrim",
-    packages=setuptools.find_packages(),
+    packages=["megrim", "megrim.plugins"],
     package_data = {
         'megrim': ['data/ONT_logo.png', 'data/FontAwesome5Free-Solid-900.otf']
     },
