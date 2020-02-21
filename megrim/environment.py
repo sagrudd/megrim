@@ -51,6 +51,7 @@ class Flounder:
         self.plot_dpi = plot_dpi
         self.seq_sum = None
         self.cache_path = "/tmp"
+        self.args = None
 
     def sync(self, new_me):
         new_me.set_path(self.get_path())
@@ -63,6 +64,7 @@ class Flounder:
 
     def argparse(self, args):
         self.cache_path = args.cache
+        self.args = args
         logging.debug(f"using cache at: {self.cache_path}")
 
     def set_path(self, path):

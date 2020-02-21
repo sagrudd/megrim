@@ -193,9 +193,12 @@ def fast5s_to_basemods(
             path, pd.DataFrame(), modification, threshold, context)
         if cached is not None:
             return cached
-
     if processes is None:
-        processes = multiprocessing.cpu_count()
+        if ("flounder" in globals()) & (flounder.args is not None):
+            processes = flounder.args.threads
+        else:
+            processes = multiprocessing.cpu_count()
+        logging.debug(f"Thread count set to [{processes}]")
     files = glob.glob("{}/*.fast5".format(path))
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as pool:
@@ -362,7 +365,11 @@ def map_methylation_signal_chunk(
 
     if methylation_chunk is None:
         if processes is None:
-            processes = multiprocessing.cpu_count()
+            if ("flounder" in globals()) & (flounder.args is not None):
+                processes = flounder.args.threads
+            else:
+                processes = multiprocessing.cpu_count()
+            logging.debug(f"Thread count set to [{processes}]")
         
         methylation_chunk = []
         # import the bam chunk

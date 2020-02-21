@@ -14,6 +14,7 @@ import argparse
 from importlib import reload
 import logging
 import tempfile
+import multiprocessing
 import sys
         
 
@@ -91,6 +92,8 @@ def main():
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--cache', metavar="/tmp", action='store', help='Path to location for storing cached and temporary files.', dest="cache", default=tempfile.gettempdir())
     parent_parser.add_argument('--debug', action='store_true', help='Display debug information and messages', dest="debug", default=False)
+    parent_parser.add_argument('--threads', action='store', help=f'The number of threads to use for parallel steps of a workflow (default={max(1, int(multiprocessing.cpu_count()/2))})',
+                               dest="threads", default=max(1, int(multiprocessing.cpu_count()/2)), type=int)
 
 
     megrim_plugins.arg_params(subparsers, parent_parser)
