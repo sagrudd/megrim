@@ -89,17 +89,17 @@ def main():
 
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--cache', metavar="/tmp", action='store', help='Path to location for storing cached and temporary files.', dest="cache", default=tempfile.gettempdir())
+    parent_parser.add_argument('--debug', action='store_true', help='Display debug information and messages', dest="debug", default=False)
+
 
     megrim_plugins.arg_params(subparsers, parent_parser)
-
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="increase output verbosity")
 
     args = parser.parse_args()
 
     # setup a Flounder for this workflow ...
     flounder = Flounder()
     flounder.cache_path = args.cache
-    print(flounder.cache_path)
+    print(f"using cache at: {flounder.cache_path}")
+    print(args.debug)
 
     megrim_plugins.execute(args)
