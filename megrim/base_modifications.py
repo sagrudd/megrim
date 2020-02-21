@@ -82,7 +82,7 @@ def fast5_to_basemods(
     result = []
     if (not force) & ("flounder" in globals()):
         cached = flounder.read_cache(
-            fast5file, result, modification, threshold, context)
+            fast5file, pd.DataFrame(), modification, threshold, context)
         if cached is not None:
             return cached
 
