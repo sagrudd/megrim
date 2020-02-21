@@ -26,6 +26,7 @@ import sys
 import hashlib
 import traceback
 import numpy as np
+import logging
 
 
 def include_flounder(args):
@@ -305,9 +306,21 @@ def mung_bam_variant(rows, chromosome, monly=True):
         DESCRIPTION.
 
     """
+    if isinstance(rows, pd.Series):
+        rows = pd.DataFrame(rows).T
+    # fix the modification column name
+    modification = None
+    if "5mC" in rows.columns:
+        modification = "5mC"
+    elif "6mA" in rows.columns:
+        modification = "6mA"
+    else:
+        raise ValueError(
+            "Suitable modification column not found")
+
     rle = cigar_rle(rows.iloc[0].cigar)
 
-    def anchor_base(position, strand, reference_start, query_length):
+    def anchor_base(position, strand, reference_start, query_length, contexts, prob):
         ref_pos = -1
         operation = "?"
         if strand == "+":
@@ -318,37 +331,17 @@ def mung_bam_variant(rows, chromosome, monly=True):
             if pos > 0:
                 operation, ref_pos = rle.q_to_r(pos)
         ref_pos = ref_pos + reference_start
-        return ref_pos, operation
+        return rows.iloc[0].read_id, chromosome, ref_pos, operation, prob, int(strand == "+"), int(strand == "-"), contexts
 
-    mapped = list(map(anchor_base, rows.position, rows.strand, rows.reference_start, rows.query_length))
-    mapped = pd.DataFrame(mapped, columns=["pos", "op"])
-
-    rows.drop(["cigar", "query_length", "query_name", "reference_start", "position"], axis=1, inplace=True)
-    rows.index = pd.RangeIndex(len(rows.index))
-    mapped = pd.concat((rows, mapped), axis=1)
-
-    # fix the modification column name
-    modification = None
-    if "5mC" in mapped.columns:
-        modification = "5mC"
-    elif "6mA" in mapped.columns:
-        modification = "6mA"
+    mapped = list(map(anchor_base, rows.position, rows.strand, rows.reference_start, rows.query_length, rows.contexts, rows[modification]))
+    mapped = pd.DataFrame(mapped, columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
+    # remove the potentially fubar columns
+    if monly:
+        mapped = mapped.loc[mapped.op == "M"]
     else:
-        raise ValueError(
-            "Suitable modification column not found")
-    mapped.rename(columns={modification: "prob", "contexts": "seq_context", "reference_name": "chromosome"}, inplace=True)
-
+        mapped = mapped.loc[mapped.op != "?"]
     # set the index for read_id
     mapped.set_index("read_id", drop=False, inplace=True)
-    mapped["fwd"] = int(mapped.iloc[0].strand == "+")
-    mapped["rev"] = int(mapped.iloc[0].strand == "-")
-    mapped.drop(["strand"], axis=1, inplace=True)
-
-    # remove the potentially fubar columns
-    mapped = mapped.loc[mapped.op == "?"]
-    if monly:
-        mapped = mapped.loc[mapped.op != "M"]
-
     return mapped
 
 
@@ -382,12 +375,8 @@ def map_methylation_signal_chunk(
         with concurrent.futures.ProcessPoolExecutor(
                 max_workers=processes) as pool:
             future_list = []
-            counter = 0
             for key in keys:
                 read_chunk = bam_chunk.loc[key, :]
-                if isinstance(read_chunk, pd.Series):
-                    read_chunk = pd.DataFrame(read_chunk).T
-
                 # mung_bam_variant(read_chunk, chromosome=chromosome)
                 future = pool.submit(
                     mung_bam_variant,
@@ -420,11 +409,10 @@ def map_methylation_signal(ref, bam, modifications, force=False):
     if mapped_reads is None:
         mapped_reads = []
         for chromo in ref.get_chromosomes():
-            print(chromo)
             chr_mapped_reads = []
             chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=5000000)
             for index in chromosome_tiles.df.index:
-                print(index)
+                logging.info(f"extracting reads from chromosome {chromo} chunk {index}/{len(chromosome_tiles.df.index)}")
                 mapped_read_chunk = map_methylation_signal_chunk(
                     ref, bam, modifications,
                     chromosome=chromo,
@@ -463,6 +451,7 @@ def map_methylation_signal(ref, bam, modifications, force=False):
             chr_mapped_reads.loc[chr_mapped_reads.ref_base == "T", "T"] = 1
             mapped_reads.append(chr_mapped_reads)
         mapped_reads = pd.concat(mapped_reads)
+
         if "flounder" in globals():
             flounder.write_cache(
                 bam.bam, mapped_reads, data_hash)
