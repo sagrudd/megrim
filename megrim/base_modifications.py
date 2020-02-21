@@ -79,7 +79,7 @@ def fast5_to_basemods(
         similar to the workflow's previous incarnation in R.
 
     """
-    result = pd.DataFrame()
+    result = []
     if (not force) & ("flounder" in globals()):
         cached = flounder.read_cache(
             fast5file, result, modification, threshold, context)
@@ -96,8 +96,9 @@ def fast5_to_basemods(
 
             mod_base_df = fast5_basemods_to_df(
                 read, latest_basecall, modification, threshold, context)
-            result = result.append(mod_base_df, sort=False)
+            result.append(mod_base_df)
 
+    result = pd.concat(result)
     if "flounder" in globals():
         flounder.write_cache(
             fast5file, result, modification, threshold, context)
@@ -295,7 +296,6 @@ def extract_bam_chunk(bam, chromosome, start, end, force=False):
         if "flounder" in globals():
             flounder.write_cache(bam.bam, data, chromosome, start, end)
     return data
-
 
 
 def fast5_indexer(fast5file):
@@ -572,6 +572,22 @@ def reduce_mapped_methylation_signal(dataframe, force=False):
 
 
 if __name__ == '__main__':
+
+
+    test = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/A1-D1-PAD851010.fast5"
+    with get_fast5_file(test, mode="r") as f5:
+
+        read_id = "ff873e4e-af54-4f52-a5f2-c5ea2e1800a3"
+        read = f5.get_read(read_id)
+        latest_basecall = read.get_latest_analysis("Basecall_1D")
+
+        mod_base_df = fast5_basemods_to_df(
+            read, latest_basecall, "5mC", 0.75, "CG")
+        print(mod_base_df)
+
+
+    sys.exit(0)
+
     flounder = Flounder()
     f5path = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/"
 
