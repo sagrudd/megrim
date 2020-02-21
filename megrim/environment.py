@@ -205,17 +205,26 @@ class Flounder:
             key = "{}.{}.{}".format(kwargs['method'],
                                     os.path.basename(kwargs['source']),
                                     kwargs['parameters'])
+
+            format = "pickle"
+            if "format" in kwargs.keys():
+                format = kwargs['format']
+            extension_map = {"pickle": "pickle", "tsv": "csv"}
+
             if isinstance(kwargs['datatype'], pd.DataFrame):
-                filename = os.path.join(self.cache_path, "{}.csv".format(key))
+                filename = os.path.join(self.cache_path, f"{key}.{extension_map[format]}")
                 if not os.path.exists(filename):
                     logging.debug(f"cache file {filename} does not exist ...")
                     return None
                 with warnings.catch_warnings():
-                    logging.debug(f"importing cache file {filename} ...")
-                    warnings.simplefilter(
-                        action='ignore', category=FutureWarning)
-                    return pd.read_csv(
-                        filename, sep="\t", index_col=0, low_memory=False)
+                    logging.debug(f"importing data from cache file {filename} as {format}...")
+                    if format == "pickle":
+                        return pd.read_pickle(filename)
+                    elif format == "tsv":
+                        return pd.read_csv(
+                            filename, sep="\t", index_col=0, low_memory=False)
+                    else:
+                        raise ValueError(f"No method available for exporting type == {format}")
             else:
                 raise ValueError(
                     "No handler for processing datatype {}".format(
@@ -258,11 +267,20 @@ class Flounder:
             key = "{}.{}.{}".format(kwargs['method'],
                                     os.path.basename(kwargs['source']),
                                     kwargs['parameters'])
+            format = "pickle"
+            if "format" in kwargs.keys():
+                format = kwargs['format']
+            extension_map = {"pickle": "pickle", "tsv": "csv"}
 
             if isinstance(kwargs['datatype'], pd.DataFrame):
-                filename = os.path.join(self.cache_path, "{}.csv".format(key))
-                logging.debug(f"writing data to cache file {filename} ...")
-                kwargs['datatype'].to_csv(filename, sep="\t")
+                filename = os.path.join(self.cache_path, f"{key}.{extension_map[format]}")
+                logging.debug(f"writing data to cache file {filename} as {format}...")
+                if format == "pickle":
+                    kwargs['datatype'].to_pickle(filename)
+                elif format == "tsv":
+                    kwargs['datatype'].to_csv(filename, sep="\t")
+                else:
+                    raise ValueError(f"No method available for exporting type == {format}")
                 return
             else:
                 raise ValueError(

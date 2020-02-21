@@ -5,6 +5,7 @@ from megrim.genome_geometry import BamHandler
 import pandas as pd
 import argparse
 import logging
+import warnings
 
 
 class BaseModifications(MegrimPlugin):
@@ -14,6 +15,9 @@ class BaseModifications(MegrimPlugin):
 
     def execute(self, args):
         include_flounder(args)
+
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+
         modifications = fast5s_to_basemods(args.fast5, modification=args.modifcation,
                                            threshold=args.probability, context=args.context)
         modifications.set_index("read_id", drop=False, inplace=True)
