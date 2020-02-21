@@ -18,9 +18,7 @@ from ont_fast5_api.fast5_interface import get_fast5_file
 import pandas as pd
 import glob
 from megrim.environment import Flounder
-from megrim.reference_genome import ReferenceGenome
-from megrim.genome_geometry import BamHandler
-from megrim.cigar import cigar_q_to_r, cigar_rle
+from megrim.cigar import cigar_rle
 import concurrent.futures
 from tqdm import tqdm
 import multiprocessing
@@ -28,8 +26,6 @@ import sys
 import hashlib
 import traceback
 import numpy as np
-from Bio.Seq import Seq
-
 
 
 def include_flounder(args):
@@ -37,6 +33,7 @@ def include_flounder(args):
     global flounder
     flounder = Flounder()
     flounder.argparse(args)
+
 
 def fast5_to_basemods(
         fast5file, latest_basecall=None, modification="5mC", threshold=0.75,
@@ -139,7 +136,7 @@ def fast5_basemods_to_df(
     offset = 0
     mod_base_df['contexts'] = list(map(a_context, mod_base_df.position, mod_base_df.position+len(context)))
     mod_base_df = mod_base_df.loc[mod_base_df.contexts == context]
-    offset = 4
+    offset = 5
     mod_base_df['contexts'] = list(map(a_context, mod_base_df.position, mod_base_df.position + len(context), ))
 
     return mod_base_df
@@ -188,11 +185,11 @@ def fast5s_to_basemods(
         similar to the workflow's previous incarnation in R.
 
     """
-    result = pd.DataFrame()
+    result = []
 
     if (not force) & ("flounder" in globals()):
         cached = flounder.read_cache(
-            path, result, modification, threshold, context)
+            path, pd.DataFrame(), modification, threshold, context)
         if cached is not None:
             return cached
 
@@ -214,8 +211,9 @@ def fast5s_to_basemods(
                 concurrent.futures.as_completed(
                     future_fast5), total=len(files)):
             basemods = future.result()
-            result = result.append(basemods, sort=False)
+            result.append(basemods)
 
+    result = pd.concat(result, sort=False)
     if "flounder" in globals():
         flounder.write_cache(
             path, result, modification, threshold, context)
@@ -262,12 +260,15 @@ def extract_bam_chunk(bam, chromosome, start, end, force=False):
             if not any([read.is_secondary, read.is_supplementary,
                         read.is_qcfail, read.is_duplicate]):
                 # and select facets as required for basemodification workflow
-                row = pd.Series({"query_name": read.query_name,
-                                 "query_length": read.query_length,
-                                 "reference_name": read.reference_name,
-                                 "reference_start": read.reference_start,
-                                 "strand": "-" if read.is_reverse else "+",
-                                 "cigar": read.cigartuples})
+                # row = pd.Series({"query_name": read.query_name,
+                #                  "query_length": read.query_length,
+                #                  "reference_name": read.reference_name,
+                #                  "reference_start": read.reference_start,
+                #                  "strand": "-" if read.is_reverse else "+",
+                #                  "cigar": read.cigartuples})
+                # creating just a list rather than a pd.Series could be faster???
+                row = [read.query_name, read.query_length, read.reference_name,
+                       read.reference_start, "-" if read.is_reverse else "+", read.cigartuples]
                 data.append(row)
 
         # convert data into a DataFrame
@@ -283,43 +284,6 @@ def extract_bam_chunk(bam, chromosome, start, end, force=False):
     return data
 
 
-def fast5_indexer(fast5file):
-    fast5_index = pd.DataFrame()
-    with get_fast5_file(fast5file, mode="r") as f5:
-        for read_id in f5.get_read_ids():
-            row = pd.Series({"fast5file": fast5file, "read_id": read_id})
-            fast5_index = fast5_index.append(row, ignore_index=True)
-    return fast5_index
-
-
-def index_fast5_content(f5path, force=False, processes=8):
-    files = glob.glob("{}/*.fast5".format(f5path))
-    fast5_index = None
-    hashstr = hashlib.md5("".join(files).encode()).hexdigest()
-    if (not force) & ("flounder" in globals()):
-        fast5_index = flounder.read_cache(
-            f5path, pd.DataFrame(), hashstr)
-    if fast5_index is None:
-        print("indexing fast5 content")
-        fast5_index = pd.DataFrame()
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as pool:
-            future_fast5 = {
-                pool.submit(fast5_indexer, fast5file=file):
-                    file for file in files
-                    }
-            for future in tqdm(
-                concurrent.futures.as_completed(future_fast5),
-                total=len(files)):
-
-                index = future.result()
-                fast5_index = fast5_index.append(index, ignore_index=True)
-
-        if "flounder" in globals():
-            flounder.write_cache(f5path, fast5_index, hashstr)
-    return fast5_index   
-    
-    
 def mung_bam_variant(rows, chromosome, monly=True):
     """
     Sync a base-modification variant with FAST5 base modification data.
@@ -384,14 +348,15 @@ def mung_bam_variant(rows, chromosome, monly=True):
                     else:
                         raise ValueError(
                             "Suitable modification column not found")
-                    results = pd.Series({"read_id": row.read_id,
-                                         "chromosome": chromosome,
-                                         "pos": ref_pos,
-                                         "fwd": int(row.strand == "+"),
-                                         "rev": int(row.strand == "-"),
-                                         "op": operation,
-                                         "prob": row[modification],
-                                         "seq_context": row.contexts})
+                    # results = pd.Series({"read_id": row.read_id,
+                    #                      "chromosome": chromosome,
+                    #                      "pos": ref_pos,
+                    #                      "fwd": int(row.strand == "+"),
+                    #                      "rev": int(row.strand == "-"),
+                    #                      "op": operation,
+                    #                      "prob": row[modification],
+                    #                      "seq_context": row.contexts})
+                    results = [row.read_id, chromosome, ref_pos, int(row.strand == "+"), int(row.strand == "-"), operation, row[modification], row.contexts]
                     return results
         except Exception as ex:
             print(str(ex))
@@ -402,16 +367,12 @@ def mung_bam_variant(rows, chromosome, monly=True):
             sys.exit(0)
 
     apply_data = rows.apply(internal_function, axis=1).dropna()
-    # if first row of apply results in a None ... we're stuck with Series
-    if isinstance(apply_data, pd.Series):
-        apply_data = pd.DataFrame(
-            [item for item in apply_data],
-            columns=["read_id", "chromosome", "pos", "fwd", "rev", "op",
-                     "prob", "seq_context"])
-        apply_data.set_index("read_id", drop=False, inplace=True)
-    # apply_data = apply_data.astype(
-    #     dtype={"pos": "int32", "fwd": "int32",
-    #            "rev": "int32", "prob": "float32"})
+
+    apply_data = pd.DataFrame(
+        [item for item in apply_data],
+        columns=["read_id", "chromosome", "pos", "fwd", "rev", "op",
+                 "prob", "seq_context"])
+    apply_data.set_index("read_id", drop=False, inplace=True)
     return apply_data
 
 
@@ -439,11 +400,12 @@ def map_methylation_signal_chunk(
 
         # perform an inner join on the datasets ...
         bam_chunk = bam_chunk.join(modifications, how="inner")
+        keys = bam_chunk["read_id"].unique()
+
         with concurrent.futures.ProcessPoolExecutor(
                 max_workers=processes) as pool:
             future_list = []
             # counter = 0
-            keys = bam_chunk["read_id"].unique()
             for key in keys:
                 read_chunk = bam_chunk.loc[key]
                 if isinstance(read_chunk, pd.Series):
