@@ -61,6 +61,10 @@ class Flounder:
         new_me.set_plot_tools(self.get_plot_tools())
         new_me.set_plot_dpi(self.get_plot_dpi())
 
+    def argparse(self, args):
+        self.cache_path = args.cache
+        logging.debug(f"using cache at: {self.cache_path}")
+
     def set_path(self, path):
         self.location = path
 
@@ -204,9 +208,10 @@ class Flounder:
             if isinstance(kwargs['datatype'], pd.DataFrame):
                 filename = os.path.join(self.cache_path, "{}.csv".format(key))
                 if not os.path.exists(filename):
-                    logging.debug("cache file does not exist ...")
+                    logging.debug(f"cache file {filename} does not exist ...")
                     return None
                 with warnings.catch_warnings():
+                    logging.debug(f"importing cache file {filename} ...")
                     warnings.simplefilter(
                         action='ignore', category=FutureWarning)
                     return pd.read_csv(
@@ -256,6 +261,7 @@ class Flounder:
 
             if isinstance(kwargs['datatype'], pd.DataFrame):
                 filename = os.path.join(self.cache_path, "{}.csv".format(key))
+                logging.debug(f"writing data to cache file {filename} ...")
                 kwargs['datatype'].to_csv(filename, sep="\t")
                 return
             else:

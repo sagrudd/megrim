@@ -31,6 +31,13 @@ import numpy as np
 from Bio.Seq import Seq
 
 
+
+def include_flounder(args):
+    # setup a Flounder for this workflow ...
+    global flounder
+    flounder = Flounder()
+    flounder.argparse(args)
+
 def fast5_to_basemods(
         fast5file, latest_basecall=None, modification="5mC", threshold=0.75,
         context="CG", force=False):

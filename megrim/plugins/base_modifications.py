@@ -1,9 +1,10 @@
 from megrim.environment import MegrimPlugin
-from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal
+from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal, include_flounder
 from megrim.reference_genome import ReferenceGenome
 from megrim.genome_geometry import BamHandler
 import pandas as pd
 import argparse
+import logging
 
 
 class BaseModifications(MegrimPlugin):
@@ -12,6 +13,7 @@ class BaseModifications(MegrimPlugin):
         self.tool = "BaseModifications"
 
     def execute(self, args):
+        include_flounder(args)
         modifications = fast5s_to_basemods(args.fast5, modification=args.modifcation,
                                            threshold=args.probability, context=args.context)
         modifications.set_index("read_id", drop=False, inplace=True)
@@ -40,9 +42,9 @@ class BaseModifications(MegrimPlugin):
         argparser.add_argument('-p', '--probability', metavar="[0..1]", action='store',
                                help='Base-modification probability. This is a floating point number between 0 and 1. A stringent selection will be closer to 1. [The default is 0.90]',
                                dest="probability", default=0.90, type=float)
-        argparser.add_argument('-c', '--context', metavar="CpG", action='store',
-                               help='Base-modification context. Only CpG has been implemented at present. [The default is CpG]',
-                               dest="context", default="CpG")
+        argparser.add_argument('-c', '--context', metavar="CG", action='store',
+                               help='Base-modification context. Only CpG has been implemented at present. [The default is CG]',
+                               dest="context", default="CG")
         argparser.add_argument('-m', '--modification', metavar="[5mC|6mA]", action='store',
                                help='The base modification to score for - this may be either 5mC or 6mA in this version of the software. [The default is 5mC]',
                                dest="modifcation", default="5mC")

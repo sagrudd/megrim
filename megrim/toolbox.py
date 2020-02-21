@@ -5,6 +5,7 @@ Created on Thu Feb 20 13:22:55 2020
 
 @author: srudd
 """
+
 import inspect
 import os
 import pkgutil
@@ -12,8 +13,8 @@ from megrim.environment import MegrimPlugin
 import argparse
 from importlib import reload
 import logging
-from megrim.environment import Flounder
 import tempfile
+import sys
         
 
 class MegrimToolBox:
@@ -67,7 +68,7 @@ class MegrimToolBox:
             print("Exception!", e)
 
     def arg_params(self, subparsers, parent_parser):
-        logging.info("merging annotations ...")
+        logging.debug("merging annotations ...")
         for plugin in self.plugins:
             plugin.arg_params(subparsers, parent_parser)
 
@@ -96,10 +97,8 @@ def main():
 
     args = parser.parse_args()
 
-    # setup a Flounder for this workflow ...
-    flounder = Flounder()
-    flounder.cache_path = args.cache
-    print(f"using cache at: {flounder.cache_path}")
-    print(args.debug)
+
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     megrim_plugins.execute(args)
