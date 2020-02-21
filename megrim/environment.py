@@ -281,6 +281,7 @@ class Flounder:
                     kwargs['datatype'].to_csv(filename, sep="\t")
                 else:
                     raise ValueError(f"No method available for exporting type == {format}")
+                logging.debug("written")
                 return
             else:
                 raise ValueError(

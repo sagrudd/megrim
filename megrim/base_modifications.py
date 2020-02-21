@@ -305,75 +305,52 @@ def mung_bam_variant(rows, chromosome, monly=True):
         DESCRIPTION.
 
     """
-    cigar_rles = {}
+    rle = cigar_rle(rows.iloc[0].cigar)
 
-    def internal_function(row):
-        if row.read_id not in cigar_rles.keys():
-            cigar_rles[row.read_id] = cigar_rle(row.cigar)
+    def anchor_base(position, strand, reference_start, query_length):
+        ref_pos = -1
+        operation = "?"
+        if strand == "+":
+            if position >= 1:
+                operation, ref_pos = rle.q_to_r(position)
+        else:  # maps to the reverse strand
+            pos = (query_length - position - 1)
+            if pos > 0:
+                operation, ref_pos = rle.q_to_r(pos)
+        ref_pos = ref_pos + reference_start
+        return ref_pos, operation
 
-        try:
-            operation = None
-            ref_pos = None
-            if row.strand == "+":
-                # print("processing (+) - pos {} ".format(row.position))
-                # operation, ref_pos = cigar_q_to_r(row.position, row.cigar)
-                if row.position >= 1:
-                    # this is a strange edge case ...
-                    operation, ref_pos = cigar_rles[row.read_id].q_to_r(
-                        row.position)
-                    ref_pos = ref_pos + row.reference_start
-                # extract the corresponding nucleotide from the ref genome
-                # print line below (commented out) for debugging
-                # print(" {} -> {} {}  == {}".format(
-                #    row.position, operation, ref_pos, base))
-            else:  # maps to the reverse strand
-                # print("processing (-) - pos {} ".format(row.position))
-                # logic here is that the start of the read is upstream, need
-                # to adjust start and end coordinates ...
-                pos = (row.query_length - row.position - 1)
-                # it is possible for reads that have a 0 position = junk!
-                if pos > 0:
-                    # operation, ref_pos = cigar_q_to_r(pos, row.cigar)
-                    operation, ref_pos = cigar_rles[row.read_id].q_to_r(pos)
-                    ref_pos = ref_pos + row.reference_start
-            # package the data for return - this is in ancestral R format
-            if ref_pos is not None:
-                # if the operation is M ...
-                if (monly and operation == "M") or not monly:
-                    modification = None
-                    if "5mC" in row.index:
-                        modification = "5mC"
-                    elif "6mA" in row.index:
-                        modification = "6mA"
-                    else:
-                        raise ValueError(
-                            "Suitable modification column not found")
-                    # results = pd.Series({"read_id": row.read_id,
-                    #                      "chromosome": chromosome,
-                    #                      "pos": ref_pos,
-                    #                      "fwd": int(row.strand == "+"),
-                    #                      "rev": int(row.strand == "-"),
-                    #                      "op": operation,
-                    #                      "prob": row[modification],
-                    #                      "seq_context": row.contexts})
-                    results = [row.read_id, chromosome, ref_pos, int(row.strand == "+"), int(row.strand == "-"), operation, row[modification], row.contexts]
-                    return results
-        except Exception as ex:
-            print(str(ex))
-            print(ex)
-            print(row)
-            print(row.index)
-            traceback.print_exc()
-            sys.exit(0)
+    mapped = list(map(anchor_base, rows.position, rows.strand, rows.reference_start, rows.query_length))
+    mapped = pd.DataFrame(mapped, columns=["pos", "op"])
 
-    apply_data = rows.apply(internal_function, axis=1).dropna()
+    rows.drop(["cigar", "query_length", "query_name", "reference_start", "position"], axis=1, inplace=True)
+    rows.index = pd.RangeIndex(len(rows.index))
+    mapped = pd.concat((rows, mapped), axis=1)
 
-    apply_data = pd.DataFrame(
-        [item for item in apply_data],
-        columns=["read_id", "chromosome", "pos", "fwd", "rev", "op",
-                 "prob", "seq_context"])
-    apply_data.set_index("read_id", drop=False, inplace=True)
-    return apply_data
+    # fix the modification column name
+    modification = None
+    if "5mC" in mapped.columns:
+        modification = "5mC"
+    elif "6mA" in mapped.columns:
+        modification = "6mA"
+    else:
+        raise ValueError(
+            "Suitable modification column not found")
+    mapped.rename(columns={modification: "prob", "contexts": "seq_context", "reference_name": "chromosome"}, inplace=True)
+
+    # set the index for read_id
+    mapped.set_index("read_id", drop=False, inplace=True)
+    mapped["fwd"] = int(mapped.iloc[0].strand == "+")
+    mapped["rev"] = int(mapped.iloc[0].strand == "-")
+    mapped.drop(["strand"], axis=1, inplace=True)
+
+    # remove the potentially fubar columns
+    mapped = mapped.loc[mapped.op == "?"]
+    if monly:
+        mapped = mapped.loc[mapped.op != "M"]
+
+    return mapped
+
 
 
 def map_methylation_signal_chunk(
@@ -405,24 +382,20 @@ def map_methylation_signal_chunk(
         with concurrent.futures.ProcessPoolExecutor(
                 max_workers=processes) as pool:
             future_list = []
-            # counter = 0
+            counter = 0
             for key in keys:
-                read_chunk = bam_chunk.loc[key]
+                read_chunk = bam_chunk.loc[key, :]
                 if isinstance(read_chunk, pd.Series):
                     read_chunk = pd.DataFrame(read_chunk).T
 
                 # mung_bam_variant(read_chunk, chromosome=chromosome)
-                # counter += 1
-                # if counter > 10:
-                #     sys.exit(0)
                 future = pool.submit(
                     mung_bam_variant,
                     read_chunk,
                     chromosome=chromosome)
                 future_list.append(future)
             # print("future list has {} members".format(len(future_list)))
-            for future in tqdm(concurrent.futures.as_completed(future_list),
-                                total=len(future_list)):
+            for future in tqdm(concurrent.futures.as_completed(future_list), total=len(future_list)):
                 bam_mapped = future.result()
                 methylation_chunk.append(bam_mapped)
 
