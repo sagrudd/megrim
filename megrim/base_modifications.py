@@ -98,7 +98,7 @@ def fast5_to_basemods(
                 read, latest_basecall, modification, threshold, context)
             result.append(mod_base_df)
 
-    result = pd.concat(result)
+    result = pd.concat(result, sort=False)
     if "flounder" in globals():
         flounder.write_cache(
             fast5file, result, modification, threshold, context)
@@ -129,34 +129,19 @@ def fast5_basemods_to_df(
     # instead of just a lambda function, this is a little over-
     # engineered; expecting more interesting IUPAC based contexts in
     # future
-    def is_context(row):
-        position = row.position
-        localcontext = sequence[position:position+len(context)]
-        if localcontext == context:
-            return True
-        return False
+    def a_context(pos, pos2):
+        if offset > 0:
+            return "{}[{}]{}".format(sequence[max(int(pos)-offset, 0): int(pos)],
+                                     sequence[int(pos): int(pos2)],
+                                     sequence[int(pos2): min(int(pos2)+offset, len(sequence)-1)])
+        return sequence[max(int(pos), 0):min(int(pos2), len(sequence)-1)]
 
-    def get_context(row, width=6):
-        position = row.position
-        start = position-width
-        if start < 0:
-            start = 0
-        end = position+len(context)+width
-        if end >= len(fastq):
-            end = len(fastq)-1
-        return "{}[{}]{}".format(sequence[start: (position)],
-                                 sequence[position: (position+len(context))],
-                                 sequence[(position+len(context)): end])
+    offset = 0
+    mod_base_df['contexts'] = list(map(a_context, mod_base_df.position, mod_base_df.position+len(context)))
+    mod_base_df = mod_base_df.loc[mod_base_df.contexts == context]
+    offset = 4
+    mod_base_df['contexts'] = list(map(a_context, mod_base_df.position, mod_base_df.position + len(context), ))
 
-    if len(mod_base_df.index) > 0:
-        contextful = mod_base_df.apply(is_context, axis=1)
-        mod_base_df = mod_base_df[contextful]
-
-    # finally augment the tabular data with actual sequence context
-    if len(mod_base_df.index) > 0:
-        mod_base_df["contexts"] = mod_base_df.apply(
-            get_context, axis=1)
-    # print(mod_base_df) # for logging/validation purposes only
     return mod_base_df
 
 
@@ -573,6 +558,9 @@ def reduce_mapped_methylation_signal(dataframe, force=False):
 
 if __name__ == '__main__':
 
+    pd.set_option("display.max_columns", None)
+    pd.set_option("display.expand_frame_repr", False)
+    pd.set_option("max_colwidth", -1)
 
     test = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/A1-D1-PAD851010.fast5"
     with get_fast5_file(test, mode="r") as f5:
@@ -609,9 +597,7 @@ if __name__ == '__main__':
     bam = "/Volumes/Samsung_T5/MethylationPyTutorial/Analysis/minimap2/Native.bam"
     bam = BamHandler(bam)
 
-    pd.set_option("display.max_columns", None)
-    pd.set_option("display.expand_frame_repr", False)
-    pd.set_option("max_colwidth", -1)
+
 
     # associated mapped bases with the available modifications
     mapped_reads = map_methylation_signal(reference, bam, modifications)
