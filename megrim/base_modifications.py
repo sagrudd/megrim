@@ -396,7 +396,7 @@ def map_methylation_signal_chunk(
 
 
 def map_methylation_signal(ref, bam, modifications, force=False):
-    print("Mapping methylation signals")
+    logging.info("Mapping methylation signals")
     
     data_hash = hashlib.md5(
         str(
@@ -459,8 +459,8 @@ def map_methylation_signal(ref, bam, modifications, force=False):
 
 
 def reduce_mapped_methylation_signal(dataframe, force=False):
-    print("reduce_mapped_methylation_signal")
-    print("...")
+    logging.info("reduce_mapped_methylation_signal")
+    logging.info("...")
     data_hash = hashlib.md5(
         str(
             len(dataframe.index)).join(
