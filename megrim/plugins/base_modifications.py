@@ -1,5 +1,5 @@
 from megrim.environment import MegrimPlugin
-from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal, include_flounder
+from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal, include_flounder, reduce_mapped_methylation_signal, augment_reduced_methylation_signal
 from megrim.reference_genome import ReferenceGenome
 from megrim.genome_geometry import BamHandler
 import pandas as pd
@@ -33,7 +33,13 @@ class BaseModifications(MegrimPlugin):
         pd.set_option("max_colwidth", -1)
 
         # associated mapped bases with the available modifications
-        map_methylation_signal(reference, bam, modifications)
+        methylation_signal = map_methylation_signal(reference, bam, modifications)
+        print(methylation_signal)
+
+        reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
+        print(reduced_reads)
+
+        augment_reduced_methylation_signal(reduced_reads, bam)
         # we should save this "result-file" as a deliverable
 
     def arg_params(self, subparsers, parent_parser):

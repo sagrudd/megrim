@@ -202,7 +202,7 @@ class ReferenceGenome():
                 myrange, window_size, tile_last=False)
     
         bam_data = bam.get_bam_ranges().df
-        #bam_data = bam_data.loc[bam_data.Strand=="+",]
+        # bam_data = bam_data.loc[bam_data.Strand=="+",]
         bam_data = pr.PyRanges(bam_data)
 
         rle = bam_data.to_rle(strand=True)
