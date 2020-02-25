@@ -17,13 +17,18 @@ from tqdm import tqdm
 import numpy as np
 import os
 import sys
+import argparse
+
 
 
 def include_flounder(args):
     # setup a Flounder for this workflow ...
     global flounder
     flounder = Flounder()
-    flounder.argparse(args)
+    if isinstance(args, argparse.Namespace):
+        flounder.argparse(args)
+    if isinstance(args, dict):
+        flounder.dictparse(args)
 
 
 class BedHandler:
@@ -105,15 +110,13 @@ class BamHandler:
             data = flounder.read_cache(
                 self.bam, pd.DataFrame())
         if data is None:
-            read_count = 0 # self.samfile.count()
-            logging.info(f"BamFile readcount == {read_count}")
-            assignments = []
-
+            read_count = 0
             for l in pysam.idxstats(self.bam).splitlines():
                 ll = l.split("\t")
                 if ll[0] != "*":
                     read_count += int(ll[2])
-
+            logging.debug(f"BamFile readcount == {read_count}")
+            assignments = []
             # parse the BAM entries for info on primary, secondary, supplementary
             #    - pick out qualitative information for summarising mapping performance
             for read in tqdm(self.samfile.fetch(), total=read_count):

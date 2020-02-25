@@ -52,6 +52,7 @@ class Flounder:
         self.seq_sum = None
         self.cache_path = "/tmp"
         self.args = None
+        self.dictargs = None
 
     def sync(self, new_me):
         new_me.set_path(self.get_path())
@@ -65,6 +66,11 @@ class Flounder:
     def argparse(self, args):
         self.cache_path = args.cache
         self.args = args
+        logging.debug(f"using cache at: {self.cache_path}")
+
+    def dictparse(self, dictargs):
+        self.cache_path = dictargs['cache']
+        self.dictargs = dictargs
         logging.debug(f"using cache at: {self.cache_path}")
 
     def set_path(self, path):
