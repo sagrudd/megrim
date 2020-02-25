@@ -196,7 +196,7 @@ def fast5s_to_basemods(
 
     if (not force) & ("flounder" in globals()):
         cached = flounder.read_cache(
-            path, pd.DataFrame(), modification, threshold, context)
+            hashlib.md5(path.encode()).hexdigest()[0:7], pd.DataFrame(), modification, threshold, context)
         if cached is not None:
             return cached
     if processes is None:
@@ -226,7 +226,7 @@ def fast5s_to_basemods(
     result = pd.concat(result, sort=False)
     if "flounder" in globals():
         flounder.write_cache(
-            path, result, modification, threshold, context)
+            hashlib.md5(path.encode()).hexdigest()[0:7], result, modification, threshold, context)
     return result
 
 
