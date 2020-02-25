@@ -53,7 +53,7 @@ def process_fastq(file):
     with _open(file) as f:
         delim = "+"
         for record in SeqIO.parse(f, 'fastq'):
-            print(record.format("fastq"))
+            print(record.format("fastq")[:-1])
 
 
 def process_file(file, file_type):
@@ -87,7 +87,7 @@ class BamStats(MegrimPlugin):
         for file in os.listdir(self.args.src):
             file_type = self.guess_format(file, True)
             if file_type is not None:
-                if (self.args.pickup is None) | (file_type == self.args.pickup.upper()):
+                if (self.args.pickup is None) or (file_type == self.args.pickup.upper()):
                     process_file(os.path.join(self.args.src, file), file_type)
 
     def execute(self, args):
