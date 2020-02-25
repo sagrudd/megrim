@@ -26,7 +26,7 @@ from tqdm import tqdm
 import multiprocessing
 import sys
 import hashlib
-import traceback
+import argparse
 import numpy as np
 import logging
 import pyranges as pr
@@ -36,7 +36,10 @@ def include_flounder(args):
     # setup a Flounder for this workflow ...
     global flounder
     flounder = Flounder()
-    flounder.argparse(args)
+    if isinstance(args, argparse.Namespace):
+        flounder.argparse(args)
+    if isinstance(args, dict):
+        flounder.dictparse(args)
 
 
 def fast5_to_basemods(

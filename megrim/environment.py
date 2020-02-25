@@ -69,7 +69,8 @@ class Flounder:
         logging.debug(f"using cache at: {self.cache_path}")
 
     def dictparse(self, dictargs):
-        self.cache_path = dictargs['cache']
+        if "cache" in dictargs.keys():
+            self.cache_path = dictargs['cache']
         self.dictargs = dictargs
         logging.debug(f"using cache at: {self.cache_path}")
 
