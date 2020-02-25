@@ -1,10 +1,4 @@
 from megrim.environment import MegrimPlugin
-from megrim.reference_genome import ReferenceGenome
-from megrim.genome_geometry import BamHandler, include_flounder
-import pandas as pd
-import argparse
-import logging
-import warnings
 import gzip
 import bz2
 from mimetypes import guess_type
