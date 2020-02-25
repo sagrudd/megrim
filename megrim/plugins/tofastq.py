@@ -5,6 +5,7 @@ from mimetypes import guess_type
 from functools import partial
 from Bio import SeqIO
 import os
+import sys
 
 
 FASTQ = "FASTQ"
@@ -53,7 +54,7 @@ def process_fastq(file):
     with _open(file) as f:
         delim = "+"
         for record in SeqIO.parse(f, 'fastq'):
-            print(record.format("fastq")[:-1])
+            sys.stdout.write(record.format("fastq"))
 
 
 def process_file(file, file_type):
