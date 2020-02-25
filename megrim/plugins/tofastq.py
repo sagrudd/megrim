@@ -52,9 +52,21 @@ def process_fastq(file):
     if encoding == "bzip2":
         _open = partial(bz2.open, mode="rt")
     with _open(file) as f:
-        delim = "+"
-        for record in SeqIO.parse(f, 'fastq'):
-            sys.stdout.write(record.format("fastq"))
+        try:
+            delim = "+"
+            for record in SeqIO.parse(f, 'fastq'):
+                sys.stdout.write(record.format("fastq"))
+        finally:
+            try:
+                sys.stdout.flush()
+            finally:
+                try:
+                    sys.stdout.close()
+                finally:
+                    try:
+                        sys.stderr.flush()
+                    finally:
+                        sys.stderr.close()
 
 
 def process_file(file, file_type):
