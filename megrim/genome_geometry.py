@@ -19,7 +19,7 @@ import os
 import sys
 import argparse
 from bokeh.plotting import figure
-from bokeh.models import Span, NumeralTickFormatter
+from bokeh.models import Span, NumeralTickFormatter, LinearAxis
 
 flounder = None
 
@@ -269,14 +269,16 @@ class BamHandler(Flounder):
         p = figure(
             title="Histogram showing distribution of coverage",
             background_fill_color="lightgrey", plot_width=plot_width,
-            plot_height=plot_height, tools=plot_tools,
-            x_axis_label='Depth-of-coverage (X-fold)',
-            y_axis_label='Bases of genome (n)')
+            plot_height=plot_height, tools=plot_tools)
         p.quad(
             source=coverage_dist, top="count", bottom=0, left='start',
             right='end', fill_color='colour', line_color="white", alpha=0.7)
-        p.xaxis.formatter = NumeralTickFormatter(format="0,0")
 
+        p.add_layout(LinearAxis(), "below")
+        p.add_layout(LinearAxis(), "left")
+
+        p.xaxis.axis_label = 'Depth-of-coverage (X-fold)'
+        p.yaxis.axis_label = 'Bases of genome (n)'
 
         return self.handle_output(p, plot_type)
 
