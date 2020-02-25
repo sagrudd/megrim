@@ -460,26 +460,20 @@ def map_methylation_signal(ref, bam, modifications, force=False):
 
             mapped_read_chunk['fwd_cov'] = rle[chromosome, "+"][mapped_read_chunk.pos]
             mapped_read_chunk['rev_cov'] = rle[chromosome, "-"][mapped_read_chunk.pos]
-            print(mapped_read_chunk)
+            logging.debug(mapped_read_chunk)
 
             chr_mapped_reads.append(mapped_read_chunk)
 
         chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
-
-        print(chr_mapped_reads)
-
-        chr_mapped_reads.drop_duplicates(
-            subset=["chromosome", "pos", "prob", "read_id"], inplace=True)
-        # and replace the base enumerations
-        chr_mapped_reads['A'] = 0
-        chr_mapped_reads['C'] = 0
-        chr_mapped_reads['G'] = 0
-        chr_mapped_reads['T'] = 0
-        chr_mapped_reads.loc[chr_mapped_reads.ref_base == "A", "A"] = 1
-        chr_mapped_reads.loc[chr_mapped_reads.ref_base == "C", "C"] = 1
-        chr_mapped_reads.loc[chr_mapped_reads.ref_base == "G", "G"] = 1
-        chr_mapped_reads.loc[chr_mapped_reads.ref_base == "T", "T"] = 1
-
+        logging.debug(chr_mapped_reads)
+        # chr_mapped_reads['A'] = 0
+        # chr_mapped_reads['C'] = 0
+        # chr_mapped_reads['G'] = 0
+        # chr_mapped_reads['T'] = 0
+        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "A", "A"] = 1
+        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "C", "C"] = 1
+        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "G", "G"] = 1
+        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "T", "T"] = 1
         if "flounder" in globals():
             flounder.write_cache(
                 bam.bam, chr_mapped_reads, data_hash)
@@ -488,7 +482,6 @@ def map_methylation_signal(ref, bam, modifications, force=False):
 
 def reduce_mapped_methylation_signal(dataframe, force=False):
     logging.info("reduce_mapped_methylation_signal")
-    logging.info("...")
     data_hash = hashlib.md5(
         str(
             len(dataframe.index)).join(
@@ -501,35 +494,11 @@ def reduce_mapped_methylation_signal(dataframe, force=False):
         df = dataframe.groupby(["chromosome", "pos"]).agg(
                 {"chromosome": "first", "pos": "first", "prob": np.mean,
                  "fwd": np.sum, "rev": np.sum, "seq_context": "first",
-                 "ref_base": "first"})
+                 "ref_base": "first", "fwd_cov": "first", "rev_cov": "first"})
         if "flounder" in globals():
             flounder.write_cache(
                 data_hash, df)
     return df
-
-
-def augment_reduced_methylation_signal(dataframe, bam, force=False):
-    logging.info("augmenting annotation for reduced signal")
-
-    dataframe.reset_index(drop=True, inplace=True)
-    print(dataframe)
-
-    data_hash = hashlib.md5(
-        str(
-            len(dataframe.index)).join(
-                dataframe.index.unique().astype(str)).encode()).hexdigest()
-    df = None
-    if (not force) & ("flounder" in globals()):
-        df = flounder.read_cache(
-            data_hash, pd.DataFrame())
-    if df is dataframe:
-        print("mining information ...")
-        df['fcov'] = 0
-        df['rcov'] = 0
-
-        # we will now re-use the BAM blocks that were parsed earlier ...
-
-        print(df)
 
 
 def bam_chunk_generator(ref, bam, tile_size=5000000, force=False):
@@ -604,8 +573,6 @@ if __name__ == '__main__':
     reference = ReferenceGenome(reference)
     bam = "/Volumes/Samsung_T5/MethylationPyTutorial/Analysis/minimap2/Native.bam"
     bam = BamHandler(bam)
-
-
 
     # associated mapped bases with the available modifications
     mapped_reads = map_methylation_signal(reference, bam, modifications)

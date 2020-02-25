@@ -8,11 +8,22 @@ Created on Wed Dec 18 16:44:30 2019
 
 import logging
 from math import log10
+from megrim.environment import Flounder
 import pandas as pd
 import pyranges as pr
 import functools
 import pysam
+from tqdm import tqdm
+import numpy as np
+import os
 import sys
+
+
+def include_flounder(args):
+    # setup a Flounder for this workflow ...
+    global flounder
+    flounder = Flounder()
+    flounder.argparse(args)
 
 
 class BedHandler:
@@ -87,6 +98,112 @@ class BamHandler:
         # this code needs to be updated to allow for selection of +/-, primary
         # secondary etc ... - this method is also independent of pysam//samtools
         return pr.read_bam(self.bam, filter_flag=3844)
+
+    def bam_stats(self, force=False):
+        data = None
+        if (not force) & ("flounder" in globals()):
+            data = flounder.read_cache(
+                self.bam, pd.DataFrame())
+        if data is None:
+            read_count = 0 # self.samfile.count()
+            logging.info(f"BamFile readcount == {read_count}")
+            assignments = []
+
+            for l in pysam.idxstats(self.bam).splitlines():
+                ll = l.split("\t")
+                if ll[0] != "*":
+                    read_count += int(ll[2])
+
+            # parse the BAM entries for info on primary, secondary, supplementary
+            #    - pick out qualitative information for summarising mapping performance
+            for read in tqdm(self.samfile.fetch(), total=read_count):
+                flag = "1"
+                if read.is_qcfail:
+                    flag = "F"
+                elif read.is_duplicate:
+                    flag = "D"
+                elif read.is_secondary:
+                    flag = "2"
+                elif read.is_supplementary:
+                    flag = "S"
+                elif read.is_unmapped:
+                    flag = "U"
+                readq = -10 * log10((10 ** (pd.Series(
+                        read.query_alignment_qualities) / -10)).mean())
+                datapoint = [flag, read.query_length, read.reference_length, readq, read.mapping_quality, read.reference_name, read.reference_start, read.reference_end]
+                assignments.append(datapoint)
+            # mung the datapoints into a DataFrame
+
+            data = pd.DataFrame(
+                assignments,
+                columns=["flag", "query_length", "reference_length", "read_qual", "map_qual",
+                         "Chromosome", "Start", "End"])
+
+            if "flounder" in globals():
+                flounder.write_cache(
+                    self.bam, data)
+        return data
+
+    def bam_index_tiled_ranges(self, tile_size=1000):
+        ranges = []
+        for l in pysam.idxstats(self.bam).splitlines():
+            ll = l.split("\t")
+            if ll[0] != "*":
+                ranges.append([ll[0], 0, ll[1]])
+        tiled_ranges = pr.gf.tile_genome(
+            pr.PyRanges(pd.DataFrame(ranges, columns=["Chromosome", "Start", "End"])),
+            tile_size, tile_last=False).df
+        return pr.PyRanges(tiled_ranges)
+
+    def mapping_summary(self, tile_size=1000, long=False):
+        mapping_data = self.bam_stats()
+        tiled_ranges = self.bam_index_tiled_ranges(tile_size=tile_size).df
+        tiled_ranges['cov'] = 0
+        tiled_ranges = pr.PyRanges(tiled_ranges)
+
+        def stratify_bam_coverage(dataframe, key):
+            subdata = dataframe[dataframe.flag == key].copy()
+            map_ranges = pr.PyRanges(
+                subdata.loc[:, ["Chromosome", "Start", "End"]])
+            bg_rle = tiled_ranges.to_rle("cov") # background of zero
+            rle = map_ranges.to_rle() + bg_rle
+            df = rle[tiled_ranges].df
+            df['VR'] = df['Run'] * df['Value']
+            df = df.groupby(["Chromosome", "Start"]).agg(
+                {"Chromosome": "first", "Start": "first", "End": "first",
+                 "Run": np.sum, "VR": np.sum})
+            df['MeanCoverage'] = df['VR'] / df['Run']
+            df = pr.PyRanges(
+                df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
+
+            readq = -10 * log10((10 ** (pd.Series(subdata.read_qual) / -10)).mean())
+            mapq = -10 * log10((10 ** (pd.Series(subdata.map_qual) / -10)).mean())
+            return pd.Series({"reads": "{:,}".format(len(subdata.index)),
+                             "bases": "{:,}".format(subdata.query_length.sum()),
+                             "mapped_bases": "{:,}".format(subdata.reference_length.sum()),
+                             "mean_length": "{:.2f}".format(subdata.query_length.mean()),
+                             "mean_quality": "{:.2f}".format(readq),
+                             "map_quality": "{:.2f}".format(mapq),
+                             "mean_coverage": "{:.2f}".format(df.df.MeanCoverage.mean())})
+
+        mapping_summary = pd.DataFrame.from_dict({"primary": stratify_bam_coverage(mapping_data, "1"),
+                                      "secondary": stratify_bam_coverage(mapping_data, "2"),
+                                      "supplementary": stratify_bam_coverage(mapping_data, "S")}, orient="columns")
+
+        if long:
+            mapping_summary.reset_index(inplace=True)
+            mapping_summary = pd.melt(
+                mapping_summary, id_vars=["index"],
+                value_vars=["primary", "secondary", "supplementary"], var_name="map_type")
+            arrays = [mapping_summary.map_type, mapping_summary['index']]
+            mapping_summary = pd.DataFrame(mapping_summary['value'].tolist(), index=arrays)
+            mapping_summary.set_axis([os.path.basename(self.bam)], axis=1, inplace=True)
+        else:
+            col = pd.MultiIndex.from_arrays(
+                [[os.path.basename(self.bam), os.path.basename(self.bam), os.path.basename(self.bam)],
+                 ["primary", "secondary", "supplementary"]])
+            mapping_summary = pd.DataFrame(mapping_summary.values.tolist(), columns=col, index=mapping_summary.index)
+        print(mapping_summary)
 
     def get_bam_coverage(self):
         logging.debug("Extracting BAM coverage")

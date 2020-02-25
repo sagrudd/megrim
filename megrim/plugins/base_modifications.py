@@ -1,5 +1,5 @@
 from megrim.environment import MegrimPlugin
-from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal, include_flounder, reduce_mapped_methylation_signal, augment_reduced_methylation_signal
+from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal, include_flounder, reduce_mapped_methylation_signal
 from megrim.reference_genome import ReferenceGenome
 from megrim.genome_geometry import BamHandler
 import pandas as pd
@@ -34,13 +34,14 @@ class BaseModifications(MegrimPlugin):
 
         # associated mapped bases with the available modifications
         methylation_signal = map_methylation_signal(reference, bam, modifications)
-        print(methylation_signal)
+        logging.info(methylation_signal)
 
         reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
-        print(reduced_reads)
-
-        augment_reduced_methylation_signal(reduced_reads, bam)
+        # reindex the dataset ... the indices are from an earlier aggregation step ...
+        reduced_reads.reset_index(["chromosome", "pos"], drop=True, inplace=True)
         # we should save this "result-file" as a deliverable
+        reduced_reads.to_csv(args.output, sep="\t")
+        # fin
 
     def arg_params(self, subparsers, parent_parser):
         argparser = subparsers.add_parser(self.tool, help="base modifications help", parents=[parent_parser])
@@ -58,3 +59,5 @@ class BaseModifications(MegrimPlugin):
         argparser.add_argument('-m', '--modification', metavar="[5mC|6mA]", action='store',
                                help='The base modification to score for - this may be either 5mC or 6mA in this version of the software. [The default is 5mC]',
                                dest="modifcation", default="5mC")
+        argparser.add_argument('-o', '--output', metavar="results-file", action='store', dest="output", required=True,
+                               help="file path to a file location where the results will be stored. The results will be stored in a TSV format.")
