@@ -18,7 +18,9 @@ import numpy as np
 import os
 import sys
 import argparse
+from bokeh.plotting import figure
 
+flounder = None
 
 
 def include_flounder(args):
@@ -90,9 +92,10 @@ class BedHandler:
         return pr.gf.genome_bounds(untargeted, self.ref.get_reference_ranges(), clip=True)
 
 
-class BamHandler:
+class BamHandler(Flounder):
 
     def __init__(self, bam):
+        Flounder.__init__(self)
         self.bam = bam
         self.samfile = pysam.AlignmentFile(bam, "rb")
 
@@ -209,6 +212,68 @@ class BamHandler:
                  ["primary", "secondary", "supplementary"]])
             mapping_summary = pd.DataFrame(mapping_summary.values.tolist(), columns=col, index=mapping_summary.index)
         return mapping_summary
+
+
+    def plot_coverage_distribution(self, tile_size=1000, bins=30, deepest_bin=None, **kwargs):
+
+        (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
+            ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+
+        mapping_data = self.bam_stats()
+        tiled_ranges = self.bam_index_tiled_ranges(tile_size=tile_size).df
+        tiled_ranges['cov'] = 0
+        tiled_ranges = pr.PyRanges(tiled_ranges)
+
+        subdata = mapping_data.copy()
+
+        map_ranges = pr.PyRanges(
+            subdata.loc[:, ["Chromosome", "Start", "End"]])
+        bg_rle = tiled_ranges.to_rle("cov")  # background of zero
+        rle = map_ranges.to_rle() + bg_rle
+        df = rle[tiled_ranges].df
+        df['VR'] = df['Run'] * df['Value']
+        df = df.groupby(["Chromosome", "Start"]).agg(
+            {"Chromosome": "first", "Start": "first", "End": "first",
+             "Run": np.sum, "VR": np.sum})
+        df['MeanCoverage'] = df['VR'] / df['Run']
+        coverage = pr.PyRanges(
+            df.reset_index(drop=True).drop(["Run", "VR"], axis=1))
+
+        mc = coverage.MeanCoverage
+        if deepest_bin is None:
+            deepest_bin = mc.max() + 1
+        boundaries = np.linspace(
+            0, deepest_bin, num=bins, endpoint=True, retstep=False)
+        assignments = np.digitize(mc, boundaries)
+
+        xxx = pd.DataFrame({"coverage": mc,
+                            "assignment": assignments,
+                            "tally": tile_size}).groupby(
+            ["assignment"]).agg(
+            {"assignment": ["first"],
+             "tally": [np.sum]})
+        xxx.columns = xxx.columns.droplevel()
+        yyy = pd.DataFrame({"start": boundaries[:-1],
+                            "end": boundaries[1:]},
+                           index=np.arange(1, len(boundaries)))
+        coverage_dist = yyy.merge(
+            xxx, how="outer", left_index=True, right_index=True)
+        coverage_dist.columns = ["start", "end", "batch", "count"]
+        coverage_dist["batch"] = coverage_dist.index
+        coverage_dist = coverage_dist.fillna(0)
+        coverage_dist["colour"] = "#1F78B4"
+
+        p = figure(title="Histogram showing distribution of coverage",
+                   background_fill_color="lightgrey", plot_width=plot_width,
+                   plot_height=plot_height, tools=plot_tools)
+        p.quad(
+            source=coverage_dist, top="count", bottom=0, left='start',
+            right='end', fill_color='colour', line_color="white", alpha=0.7)
+        p.xaxis.axis_label = 'Depth-of-coverage (X-fold)'
+        p.yaxis.axis_label = 'Bases of genome (n)'
+        return self.handle_output(p, plot_type)
+
+
 
     def get_bam_coverage(self):
         logging.debug("Extracting BAM coverage")

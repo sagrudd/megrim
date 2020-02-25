@@ -20,6 +20,8 @@ class BamStats(MegrimPlugin):
         bam = BamHandler(args.bam)
         print(bam.mapping_summary())
 
+        print(bam.plot_coverage_distribution())
+
 
     def arg_params(self, subparsers, parent_parser):
         argparser = subparsers.add_parser(self.tool, help="bam stats help", parents=[parent_parser])
