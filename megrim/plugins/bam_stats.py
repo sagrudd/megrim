@@ -18,7 +18,7 @@ class BamStats(MegrimPlugin):
         warnings.simplefilter(action='ignore', category=FutureWarning)
 
         bam = BamHandler(args.bam)
-        bam.mapping_summary()
+        print(bam.mapping_summary())
 
 
     def arg_params(self, subparsers, parent_parser):

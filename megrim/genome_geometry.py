@@ -190,6 +190,8 @@ class BamHandler:
                                       "secondary": stratify_bam_coverage(mapping_data, "2"),
                                       "supplementary": stratify_bam_coverage(mapping_data, "S")}, orient="columns")
 
+        mapping_summary['secondary'][['bases', 'mean_quality', 'map_quality', 'mean_length']] = ["", "", "", ""]
+
         if long:
             mapping_summary.reset_index(inplace=True)
             mapping_summary = pd.melt(
@@ -203,7 +205,7 @@ class BamHandler:
                 [[os.path.basename(self.bam), os.path.basename(self.bam), os.path.basename(self.bam)],
                  ["primary", "secondary", "supplementary"]])
             mapping_summary = pd.DataFrame(mapping_summary.values.tolist(), columns=col, index=mapping_summary.index)
-        print(mapping_summary)
+        return mapping_summary
 
     def get_bam_coverage(self):
         logging.debug("Extracting BAM coverage")
