@@ -32,6 +32,121 @@ import logging
 import pyranges as pr
 
 
+
+class BaseModifications(Flounder):
+
+    def __init__(self, fast5, bam, reference, args):
+        Flounder.__init__(self)
+        if isinstance(args, argparse.Namespace):
+            self.argparse(args)
+        if isinstance(args, dict):
+            self.dictparse(args)
+
+        self.fast5 = fast5
+        self.reference = reference
+        self.bam = bam
+        self.index = hashlib.md5(
+                    f" {self.fast5} {self.reference} {self.modification} {self.bam} {self.context} {self.threshold} ".encode()).hexdigest()[0:7]
+        self.modification = "5mC"
+        self.threshold = 0.85
+        self.context = "CG"
+
+
+
+    def fast5s_to_basemods(self, processes=None, force=False):
+        """
+        Collate primitive base-modification information from defined folder.
+
+        This method implements the fast5_to_basemods function across a whole
+        directory of fast5 files - the results will, if possible, be cached within
+        the Flounder framework for faster recall and recovery.
+
+        Parameters
+        ----------
+        path: String
+            Path to the FAST5 directory that will be processed.
+        latest_basecall: String
+            The ont_fast5_api parses the FAST5 file for a version of a basecall
+            analysis suitable for pulling out the basemod information. This can
+            be specified at the command_line if required.
+        modification: String
+            The base-modification to be reported. The default is "5mC". The other
+            allowed value in "6mA"
+        threshold: float
+            The probability threshold with which to filter the returned base
+            modifications. The default is 0.75.
+        context: String
+            The local sequence context to use. The default is "CG". If the
+            base-modification does not appear within this context it will not be
+            returned - there is some TODO here to expand utility.
+        force: boolean
+            If True any existing cached (Flounder) data will be ignored.
+        processes: int
+            The number of threads to use in data calculation. The default is None
+            and the number of available computer cores will be used.
+
+        Returns
+        -------
+        pandas.DataFrame
+            The results will be returned in the format of a Pandas DataFrame
+            similar to the workflow's previous incarnation in R.
+
+        """
+        result = None
+
+        if not force:
+            result = self.read_cache(
+                hashlib.md5(self.fast5.encode()).hexdigest()[0:7], pd.DataFrame(), self.modification, self.context)
+
+        if result is None:
+            result = []
+            if processes is None:
+                processes = self.thread_processes
+            files = glob.glob("{}/*.fast5".format(self.fast5))
+
+            # {result.append(self.fast5_to_basemods(file, threshold=0)): file for file in files}
+            with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as pool:
+                future_fast5 = {
+                    pool.submit(
+                        lfast5_to_basemods,
+                        file,
+                        context=self.context,
+                        modification=self.modification,
+                        force=force): file for file in files}
+                for future in tqdm(
+                        concurrent.futures.as_completed(
+                            future_fast5), total=len(files)):
+                    result.append(future.result())
+
+            result = pd.concat(result, sort=False)
+            result.set_index("read_id", drop=False, inplace=True)
+            self.write_cache(
+                    hashlib.md5(self.fast5.encode()).hexdigest()[0:7], result, self.modification, self.context)
+        return result
+
+
+    def filter_modifications_by_prob(self, force=False):
+        f_modifications = None
+        if not force:
+            f_modifications = self.read_cache(self.index, pd.DataFrame())
+
+        if f_modifications is None:
+            # derive results from within class - saves a long chain of maintaining variables ...
+            modifications = self.fast5s_to_basemods()
+
+            f_modifications = modifications.loc[modifications[self.modification] >= float(self.threshold)]
+            if "flounder" in globals():
+                flounder.write_cache(self.index, f_modifications)
+        return f_modifications
+
+
+
+
+
+
+
+
+
 def include_flounder(args):
     # setup a Flounder for this workflow ...
     global flounder
@@ -42,75 +157,8 @@ def include_flounder(args):
         flounder.dictparse(args)
 
 
-def fast5_to_basemods(
-        fast5file, latest_basecall=None, modification="5mC", threshold=0.75,
-        context="CG", force=False):
-    """
-    Given a FAST5 file, return a DataFrame of filtered base modifications.
 
-    Guppy provides a model for base-modification calling. The results from
-    the analysis are written in tabular form to the FAST5 file. This method
-    uses the ont_fast5_api to extract the modified bases, to filter on the
-    basis of the probability threshold reported and to further reduce using
-    the provided sequence context. The result should be a pandas DataFrame
-    suitable for other downstream sequence analysis.
-
-    Parameters
-    ----------
-    fast5file: String
-        Path to the FAST5 file that will be processed.
-    latest_basecall: String
-        The ont_fast5_api parses the FAST5 file for a version of a basecall
-        analysis suitable for pulling out the basemod information. This can
-        be specified at the command_line if required.
-    modification: String
-        The base-modification to be reported. The default is "5mC". The other
-        allowed value in "6mA"
-    threshold: float
-        The probability threshold with which to filter the returned base
-        modifications. The default is 0.75.
-    context: String
-        The local sequence context to use. The default is "CG". If the
-        base-modification does not appear within this context it will not be
-        returned - there is some TODO here to expand utility.
-    force: boolean
-        If True any existing cached (Flounder) data will be ignored.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The results will be returned in the format of a Pandas DataFrame
-        similar to the workflow's previous incarnation in R.
-
-    """
-    result = []
-    if (not force) & ("flounder" in globals()):
-        cached = flounder.read_cache(
-            fast5file, pd.DataFrame(), modification, threshold, context)
-        if cached is not None:
-            return cached
-
-    with get_fast5_file(fast5file, mode="r") as f5:
-        for read_id in f5.get_read_ids():
-            # print(read_id)
-            read = f5.get_read(read_id)
-            if latest_basecall is None:
-                latest_basecall = read.get_latest_analysis("Basecall_1D")
-                # print(latest_basecall)
-
-            mod_base_df = fast5_basemods_to_df(
-                read, latest_basecall, modification, threshold, context)
-            result.append(mod_base_df)
-
-    result = pd.concat(result, sort=False)
-    if "flounder" in globals():
-        flounder.write_cache(
-            fast5file, result, modification, threshold, context)
-    return result
-
-
-def fast5_basemods_to_df(
-        read, latest_basecall, modification, threshold, context):
+def lfast5_basemods_to_df(read, latest_basecall, modification, context):
     mod_base_df = pd.DataFrame(
         data=read.get_analysis_dataset(
             latest_basecall,
@@ -121,9 +169,7 @@ def fast5_basemods_to_df(
 
     # reduce the data by modification and probability threshold
     mod_base_df[modification] = mod_base_df[modification] / 255
-    mod_base_df = mod_base_df.loc[
-        mod_base_df[modification] > threshold,
-        ["read_id", "position", modification]]
+    mod_base_df = mod_base_df.loc[:, ["read_id", "position", modification]]
 
     # reduce by local sequence context
     fastq = read.get_analysis_dataset(
@@ -145,90 +191,53 @@ def fast5_basemods_to_df(
     mod_base_df = mod_base_df.loc[mod_base_df.contexts == context]
     offset = 5
     mod_base_df['contexts'] = list(map(a_context, mod_base_df.position, mod_base_df.position + len(context), ))
-
     return mod_base_df
 
 
 
 
-def fast5s_to_basemods(
-        path, latest_basecall=None, modification="5mC", threshold=0.75,
-        context="CG", force=False, processes=None):
-    """
-    Collate primitive base-modification information from defined folder.
-
-    This method implements the fast5_to_basemods function across a whole
-    directory of fast5 files - the results will, if possible, be cached within
-    the Flounder framework for faster recall and recovery.
-
-    Parameters
-    ----------
-    path: String
-        Path to the FAST5 directory that will be processed.
-    latest_basecall: String
-        The ont_fast5_api parses the FAST5 file for a version of a basecall
-        analysis suitable for pulling out the basemod information. This can
-        be specified at the command_line if required.
-    modification: String
-        The base-modification to be reported. The default is "5mC". The other
-        allowed value in "6mA"
-    threshold: float
-        The probability threshold with which to filter the returned base
-        modifications. The default is 0.75.
-    context: String
-        The local sequence context to use. The default is "CG". If the
-        base-modification does not appear within this context it will not be
-        returned - there is some TODO here to expand utility.
-    force: boolean
-        If True any existing cached (Flounder) data will be ignored.
-    processes: int
-        The number of threads to use in data calculation. The default is None
-        and the number of available computer cores will be used.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The results will be returned in the format of a Pandas DataFrame
-        similar to the workflow's previous incarnation in R.
-
-    """
-    result = []
-
+def lfast5_to_basemods(fast5file, modification, context, force=False):
+    print(fast5file)
+    result = None
     if (not force) & ("flounder" in globals()):
         cached = flounder.read_cache(
-            hashlib.md5(path.encode()).hexdigest()[0:7], pd.DataFrame(), modification, threshold, context)
-        if cached is not None:
-            return cached
-    if processes is None:
-        if ("flounder" in globals()) & (flounder.args is not None):
-            processes = flounder.args.threads
-        else:
-            processes = multiprocessing.cpu_count()
-        logging.debug(f"Thread count set to [{processes}]")
-    files = glob.glob("{}/*.fast5".format(path))
+            fast5file, pd.DataFrame(), modification, context)
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=processes) as pool:
-        future_fast5 = {
-            pool.submit(
-                fast5_to_basemods,
-                fast5file=file,
-                latest_basecall=latest_basecall,
-                modification=modification,
-                threshold=threshold,
-                context=context,
-                force=force): file for file in files}
-        for future in tqdm(
-                concurrent.futures.as_completed(
-                    future_fast5), total=len(files)):
-            basemods = future.result()
-            result.append(basemods)
+    if result is None:
+        latest_basecall = None
+        result = []
+        with get_fast5_file(fast5file, mode="r") as f5:
+            for read_id in f5.get_read_ids():
+                # print(read_id)
+                read = f5.get_read(read_id)
+                if latest_basecall is None:
+                    latest_basecall = read.get_latest_analysis("Basecall_1D")
 
-    result = pd.concat(result, sort=False)
-    result.set_index("read_id", drop=False, inplace=True)
-    if "flounder" in globals():
-        flounder.write_cache(
-            hashlib.md5(path.encode()).hexdigest()[0:7], result, modification, threshold, context)
+                mod_base_df = lfast5_basemods_to_df(read, latest_basecall, modification, context)
+                result.append(mod_base_df)
+
+        result = pd.concat(result, sort=False)
+        if "flounder" in globals():
+            flounder.write_cache(
+                fast5file, result, modification, context)
     return result
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def extract_bam_chunk(bam, chromosome, start, end, force=False):

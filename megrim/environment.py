@@ -25,6 +25,7 @@ import tempfile
 import pandas as pd
 from inspect import getframeinfo, currentframe
 import warnings
+import multiprocessing
 
 
 class Flounder:
@@ -53,6 +54,7 @@ class Flounder:
         self.cache_path = "/tmp"
         self.args = None
         self.dictargs = None
+        self.thread_processes = multiprocessing.cpu_count()
 
     def sync(self, new_me):
         new_me.set_path(self.get_path())
@@ -68,13 +70,19 @@ class Flounder:
         self.args = args
         logging.debug(f"using cache at: {self.cache_path}")
         os.makedirs(self.cache_path, exist_ok=True) # create cache directory if not existing
+        self.thread_processes = args.threads
+        logging.debug(f"allowing available threads: {self.thread_processes}")
 
     def dictparse(self, dictargs):
         if "cache" in dictargs.keys():
             self.cache_path = dictargs['cache']
+            logging.debug(f"using cache at: {self.cache_path}")
+            os.makedirs(self.cache_path, exist_ok=True)  # create cache directory if not existing
+        if "threads" in dictargs.keys():
+            self.thread_processes = int(dictargs['threads'])
+            logging.debug(f"allowing available threads: {self.thread_processes}")
         self.dictargs = dictargs
-        logging.debug(f"using cache at: {self.cache_path}")
-        os.makedirs(self.cache_path, exist_ok=True)  # create cache directory if not existing
+
 
     def set_path(self, path):
         self.location = path

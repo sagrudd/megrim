@@ -1,6 +1,5 @@
 from megrim.environment import MegrimPlugin
-from megrim.base_modifications import fast5s_to_basemods, map_methylation_signal, \
-    include_flounder, reduce_mapped_methylation_signal
+from megrim.base_modifications import BaseModifications, include_flounder, lfast5_to_basemods
 from megrim.reference_genome import ReferenceGenome
 from megrim.genome_geometry import BamHandler
 import pandas as pd
@@ -10,44 +9,64 @@ import os
 import multiprocessing
 
 
-class BaseModifications(MegrimPlugin):
+class BaseModificationsPlugin(MegrimPlugin):
     def __init__(self):
         super().__init__()
         self.tool = "BaseModifications"
 
     def execute(self, args):
-        include_flounder(args)
-
         warnings.simplefilter(action='ignore', category=FutureWarning)
-        # set NUMEXPR_MAX_THREADS environment variable to prevent numpy logging
         os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
-        modifications = fast5s_to_basemods(args.fast5, modification=args.modifcation,
-                                           threshold=args.probability, context=args.context)
-        # print out the modifications - quick reality check
-        print(modifications)
+        include_flounder(args)
 
-        if args.index:
-            modifications.to_csv(args.output, sep="\t")
-        else:
-            # define a reference genome and bam file
-            reference = ReferenceGenome(args.fasta)
-            bam = BamHandler(args.bam)
+        fast5 = args.fast5
+        bam = BamHandler(args.bam)
+        reference = ReferenceGenome(args.fasta)
 
-            pd.set_option("display.max_columns", None)
-            pd.set_option("display.expand_frame_repr", False)
-            pd.set_option("max_colwidth", -1)
+        base_mods = BaseModifications(fast5, bam, reference, args)
 
-            # associated mapped bases with the available modifications
-            methylation_signal = map_methylation_signal(reference, bam, modifications)
-            logging.info(methylation_signal)
+        base_mod_vals = base_mods.filter_modifications_by_prob()
+        print(base_mod_vals)
 
-            reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
-            # reindex the dataset ... the indices are from an earlier aggregation step ...
-            reduced_reads.reset_index(["chromosome", "pos"], drop=True, inplace=True)
-            # we should save this "result-file" as a deliverable
-            reduced_reads.to_csv(args.output, sep="\t")
-        # fin
+
+        # include_flounder(args)
+        #
+        # warnings.simplefilter(action='ignore', category=FutureWarning)
+        # # set NUMEXPR_MAX_THREADS environment variable to prevent numpy logging
+        # os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
+        #
+        # modifications = fast5s_to_basemods(args.fast5, modification=args.modifcation,
+        #                                    threshold=0, context=args.context)
+        #
+        # index = f"{os.path.basename(args.bam)}_{args.probability}_{args.modifcation}_{args.context}"
+        # modifications = filter_modifications_by_prob(modifications, threshold=args.probability, index=index)
+        #
+        # # threshold=args.probability
+        # # print out the modifications - quick reality check
+        # print(modifications)
+        #
+        # if args.index:
+        #     modifications.to_csv(args.output, sep="\t")
+        # else:
+        #     # define a reference genome and bam file
+        #     reference = ReferenceGenome(args.fasta)
+        #     bam = BamHandler(args.bam)
+        #
+        #     pd.set_option("display.max_columns", None)
+        #     pd.set_option("display.expand_frame_repr", False)
+        #     pd.set_option("max_colwidth", -1)
+        #
+        #     # associated mapped bases with the available modifications
+        #     methylation_signal = map_methylation_signal(reference, bam, modifications)
+        #     logging.info(methylation_signal)
+        #
+        #     reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
+        #     # reindex the dataset ... the indices are from an earlier aggregation step ...
+        #     reduced_reads.reset_index(["chromosome", "pos"], drop=True, inplace=True)
+        #     # we should save this "result-file" as a deliverable
+        #     reduced_reads.to_csv(args.output, sep="\t")
+        # # fin
 
     def arg_params(self, subparsers, parent_parser):
         argparser = subparsers.add_parser(self.tool, help="base modifications help", parents=[parent_parser])
