@@ -67,12 +67,14 @@ class Flounder:
         self.cache_path = args.cache
         self.args = args
         logging.debug(f"using cache at: {self.cache_path}")
+        os.mkdirs(self.cache_path, exist_ok=True) # create cache directory if not existing
 
     def dictparse(self, dictargs):
         if "cache" in dictargs.keys():
             self.cache_path = dictargs['cache']
         self.dictargs = dictargs
         logging.debug(f"using cache at: {self.cache_path}")
+        os.mkdirs(self.cache_path, exist_ok=True)  # create cache directory if not existing
 
     def set_path(self, path):
         self.location = path

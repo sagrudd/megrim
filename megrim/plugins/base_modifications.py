@@ -66,4 +66,5 @@ class BaseModifications(MegrimPlugin):
                                help='The base modification to score for - this may be either 5mC or 6mA in this '
                                     'version of the software. [The default is 5mC]', dest="modifcation", default="5mC")
         argparser.add_argument('-o', '--output', metavar="results-file", action='store', dest="output", required=True,
-                               help="file path to a file location where the results will be stored. The results will be stored in a TSV format.")
+                               help="file path to a file location where the results will be stored. The results will "
+                                    "be stored in a TSV format.")
