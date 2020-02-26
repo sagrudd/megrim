@@ -49,7 +49,8 @@ class BaseModifications(Flounder):
         self.threshold = 0.85
         self.context = "CG"
         self.index = hashlib.md5(
-                    f" {self.fast5} {self.reference} {self.modification} {self.bam} {self.context} {self.threshold} ".encode()).hexdigest()[0:7]
+                    f" {self.fast5} {self.reference.fasta.filename} {self.bam.bam} {self.modification} {self.context} {self.threshold} ".encode()).hexdigest()[0:7]
+        logging.info(f"workflow_index == [{self.index}]")
 
 
 
@@ -518,81 +519,3 @@ def reduce_mapped_methylation_signal(dataframe, force=False):
     return df
 
 
-def bam_chunk_generator(ref, bam, tile_size=5000000, force=False):
-    for chromo in ref.get_chromosomes():
-        chr_mapped_reads = []
-        chromosome_tiles = ref.get_tiled_chromosome(chromo, tile_size=tile_size)
-        for index in chromosome_tiles.df.index:
-            logging.info(f"extracting reads from chromosome {chromo} chunk {index}/{len(chromosome_tiles.df.index)}")
-            start = chromosome_tiles.df.iloc[index].Start
-            end = chromosome_tiles.df.iloc[index].End
-            bam_chunk = extract_bam_chunk(bam, chromo, start, end, force)
-            yield bam_chunk
-
-
-
-
-
-
-if __name__ == '__main__':
-
-    pd.set_option("display.max_columns", None)
-    pd.set_option("display.expand_frame_repr", False)
-    pd.set_option("max_colwidth", -1)
-
-
-
-    flounder = Flounder()
-    flounder.cache_path = "/tmp/"
-    f5path = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/"
-    # define a reference genome and bam file
-    reference = "/Volumes/Samsung_T5/MethylationPyTutorial/ReferenceData/human_g1k_v37.chr20.fasta"
-    reference = ReferenceGenome(reference)
-    bam = "/Volumes/Samsung_T5/MethylationPyTutorial/Analysis/minimap2/Native.bam"
-    bam = BamHandler(bam)
-
-    for bam_chunk in bam_chunk_generator(reference, bam):
-        print(bam_chunk)
-
-    sys.exit(0)
-
-    test = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/A1-D1-PAD851010.fast5"
-    with get_fast5_file(test, mode="r") as f5:
-
-        read_id = "ff873e4e-af54-4f52-a5f2-c5ea2e1800a3"
-        read = f5.get_read(read_id)
-        latest_basecall = read.get_latest_analysis("Basecall_1D")
-
-        mod_base_df = fast5_basemods_to_df(
-            read, latest_basecall, "5mC", 0.75, "CG")
-        print(mod_base_df)
-
-
-    sys.exit(0)
-
-    flounder = Flounder()
-    f5path = "/Volumes/Samsung_T5/MethylationPyTutorial/RawData/ONLL04465/fast5chr20_mods/workspace/"
-
-    # define working parameters
-    modification = "5mC"
-    threshold = 0.75
-    context = "CG"
-
-    # parse modifications from available fast5 files
-    modifications = fast5s_to_basemods(f5path, modification=modification,
-                                       threshold=threshold, context=context)
-    modifications.set_index("read_id", drop=False, inplace=True)
-    # print out the modifications - quick reality checkk
-    print(modifications)
-
-    # define a reference genome and bam file
-    reference = "/Volumes/Samsung_T5/MethylationPyTutorial/ReferenceData/human_g1k_v37.chr20.fasta"
-    reference = ReferenceGenome(reference)
-    bam = "/Volumes/Samsung_T5/MethylationPyTutorial/Analysis/minimap2/Native.bam"
-    bam = BamHandler(bam)
-
-    # associated mapped bases with the available modifications
-    mapped_reads = map_methylation_signal(reference, bam, modifications)
-    print(mapped_reads)
-    reduced_reads = reduce_mapped_methylation_signal(mapped_reads)
-    print(reduced_reads)
