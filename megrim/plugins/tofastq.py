@@ -53,9 +53,9 @@ def process_fastq(file):
         _open = partial(bz2.open, mode="rt")
     with _open(file) as f:
         try:
-            delim = "+"
-            for record in SeqIO.parse(f, 'fastq'):
-                sys.stdout.write(record.format("fastq"))
+            # for record in SeqIO.parse(f, 'fastq'):
+            #    sys.stdout.write(record.format("fastq"))
+            sys.stdout.write(f.readline())
         finally:
             try:
                 sys.stdout.flush()
