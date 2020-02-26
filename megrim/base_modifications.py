@@ -348,14 +348,14 @@ def mung_bam_variant(rows, monly=True):
         return rows.iloc[0].read_id, chromosome, ref_pos, operation, prob, int(strand == "+"), int(strand == "-"), contexts
 
     mapped = list(map(anchor_base, rows.position, rows.strand, rows.reference_start, rows.query_length, rows.contexts, rows[modification]))
-    mapped = pd.DataFrame(mapped, columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
-    # remove the potentially fubar columns
-    if monly:
-        mapped = mapped.loc[mapped.op == "M"]
-    else:
-        mapped = mapped.loc[mapped.op != "?"]
-    # set the index for read_id
-    mapped.set_index("read_id", drop=False, inplace=True)
+    # mapped = pd.DataFrame(mapped, columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
+    # # remove the potentially fubar columns
+    # if monly:
+    #     mapped = mapped.loc[mapped.op == "M"]
+    # else:
+    #     mapped = mapped.loc[mapped.op != "?"]
+    # # set the index for read_id
+    # # mapped.set_index("read_id", drop=False, inplace=True)
     return mapped
 
 
@@ -404,7 +404,14 @@ def map_methylation_signal_chunk(bam_chunk, modifications, force=False, processe
                 bam_mapped = future.result()
                 methylation_chunk.append(bam_mapped)
 
-        methylation_chunk = pd.concat(methylation_chunk)
+        #methylation_chunk = pd.concat(methylation_chunk)
+
+        methylation_chunk = pd.DataFrame(
+            methylation_chunk,
+            columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
+
+        print(methylation_chunk)
+        sys.exit(0)
         if "flounder" in globals():
             flounder.write_cache(
                 "bam.bam", methylation_chunk, modifications_hash, bam_hash)

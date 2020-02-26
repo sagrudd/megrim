@@ -52,22 +52,10 @@ def process_fastq(file):
     if encoding == "bzip2":
         _open = partial(bz2.open, mode="rt")
     with _open(file) as f:
-        try:
-            # for record in SeqIO.parse(f, 'fastq'):
-            #    sys.stdout.write(record.format("fastq"))
-            for line in f:
-                sys.stdout.write(line)
-        finally:
-            try:
-                sys.stdout.flush()
-            finally:
-                try:
-                    sys.stdout.close()
-                finally:
-                    try:
-                        sys.stderr.flush()
-                    finally:
-                        sys.stderr.close()
+        # for record in SeqIO.parse(f, 'fastq'):
+        #    sys.stdout.write(record.format("fastq"))
+        for line in f:
+            sys.stdout.write(line)
 
 
 def process_file(file, file_type):
@@ -111,9 +99,19 @@ class BamStats(MegrimPlugin):
         if file_format == DIRECTORY:
             self.parse_directory()
         else:
-            process_file(self.args.src, file_format)
-
-
+            try:
+                process_file(self.args.src, file_format)
+            finally:
+                try:
+                    sys.stdout.flush()
+                finally:
+                    try:
+                        sys.stdout.close()
+                    finally:
+                        try:
+                            sys.stderr.flush()
+                        finally:
+                            sys.stderr.close()
 
     def arg_params(self, subparsers, parent_parser):
         argparser = subparsers.add_parser(self.tool, help="tofastq help", parents=[parent_parser])
