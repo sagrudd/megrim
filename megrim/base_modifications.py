@@ -45,11 +45,11 @@ class BaseModifications(Flounder):
         self.fast5 = fast5
         self.reference = reference
         self.bam = bam
-        self.index = hashlib.md5(
-                    f" {self.fast5} {self.reference} {self.modification} {self.bam} {self.context} {self.threshold} ".encode()).hexdigest()[0:7]
         self.modification = "5mC"
         self.threshold = 0.85
         self.context = "CG"
+        self.index = hashlib.md5(
+                    f" {self.fast5} {self.reference} {self.modification} {self.bam} {self.context} {self.threshold} ".encode()).hexdigest()[0:7]
 
 
 
