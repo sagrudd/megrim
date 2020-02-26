@@ -386,13 +386,12 @@ def map_methylation_signal_chunk(bam_chunk, modifications, force=False, processe
         methylation_chunk = []
         # perform an inner join on the datasets ...
         bam_chunk = bam_chunk.join(modifications, how="inner")
-        print(bam_chunk)
         keys = bam_chunk["read_id"].unique()
 
         with concurrent.futures.ProcessPoolExecutor(
                 max_workers=processes) as pool:
             future_list = []
-            for key in keys:
+            for key in tqdm(keys):
                 read_chunk = bam_chunk.loc[key, :]
                 # mung_bam_variant(read_chunk)
                 future = pool.submit(
@@ -402,16 +401,13 @@ def map_methylation_signal_chunk(bam_chunk, modifications, force=False, processe
             # print("future list has {} members".format(len(future_list)))
             for future in tqdm(concurrent.futures.as_completed(future_list), total=len(future_list)):
                 bam_mapped = future.result()
-                methylation_chunk.append(bam_mapped)
-
-        #methylation_chunk = pd.concat(methylation_chunk)
+                for row in bam_mapped:
+                    methylation_chunk.append(row)
 
         methylation_chunk = pd.DataFrame(
             methylation_chunk,
             columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
-
-        print(methylation_chunk)
-        sys.exit(0)
+        methylation_chunk.set_index("read_id", drop=False, inplace=True)
         if "flounder" in globals():
             flounder.write_cache(
                 "bam.bam", methylation_chunk, modifications_hash, bam_hash)
