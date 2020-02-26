@@ -95,10 +95,15 @@ class BedHandler:
 
 class BamHandler(Flounder):
 
-    def __init__(self, bam):
+    def __init__(self, bam, args=None):
         Flounder.__init__(self)
         self.bam = bam
         self.samfile = pysam.AlignmentFile(bam, "rb")
+        if args is not None:
+            if isinstance(args, argparse.Namespace):
+                self.argparse(args)
+            if isinstance(args, dict):
+                self.dictparse(args)
 
     @functools.lru_cache()
     def get_bam_ranges(self, filter_flag=3844):
@@ -277,7 +282,75 @@ class BamHandler(Flounder):
 
         return self.handle_output(p, plot_type)
 
+    def chunk_generator(self, tile_size=5000000, force=False):
 
+        map = self.bam_index_tiled_ranges(tile_size=tile_size)
+        print(map)
+
+        for i in map.df.index:
+            chromo = map.df.iloc[i].Chromosome
+            start = map.df.iloc[i].Start
+            end = map.df.iloc[i].End
+            logging.info(
+                f"extracting reads from chromosome {chromo} chunk {i+1}/{len(map.df.index)} [{start}:{end}]")
+            bam_chunk = self.extract_bam_chunk(chromo, start, end, force)
+            yield bam_chunk
+
+
+    def extract_bam_chunk(self, chromosome, start, end, force=False):
+        """
+        Extract minimal bam associated annotation for given coordinates.
+
+        This method will parse bamfile, bam, and return a pandas DataFrame
+        containing key observations to facilitate a base-modification workflow.
+
+        Parameters
+        ----------
+        bam: bam
+            An object of class bam.
+        chromosome: Str
+            The chromosome object of interest.
+        start: int
+            start position in chromosome.
+        end: int
+            The chromosomal end position
+        force: boolean, optional
+            Whether to force the analysis, or whether to allow for a cached result
+            to be returned. The default is False.
+
+        Returns
+        -------
+        data: pd.DataFrame
+            Pandas DataFrame containing the parsed entries.
+
+        """
+        # recover the cached data if possible
+        if not force:
+            data = self.read_cache(self.bam, pd.DataFrame(), chromosome, start, end)
+
+        if data is None:
+            data = []
+            # extract reads from a bam file
+            reads = self.get_sam_core(chromosome, start, end)
+            for read in reads:
+                # select primary mappings only
+                if not any([read.is_secondary, read.is_supplementary,
+                            read.is_qcfail, read.is_duplicate]):
+                    row = [read.query_name, read.query_length, read.reference_name,
+                           read.reference_start, read.reference_end,
+                           "-" if read.is_reverse else "+", read.cigartuples]
+                    data.append(row)
+            # convert data into a DataFrame
+            data = pd.DataFrame(
+                data,
+                columns=["query_name", "query_length", "reference_name",
+                         "reference_start", "reference_end", "strand", "cigar"])
+            data['block_start'] = start
+            data['block_end'] = end
+            # prettify the data
+            data.set_index("query_name", drop=False, inplace=True)
+            self.write_cache(self.bam, data, chromosome, start, end)
+        return data
 
     def get_bam_coverage(self):
         logging.debug("Extracting BAM coverage")

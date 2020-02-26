@@ -21,13 +21,15 @@ class BaseModificationsPlugin(MegrimPlugin):
         include_flounder(args)
 
         fast5 = args.fast5
-        bam = BamHandler(args.bam)
+        bam = BamHandler(args.bam, args)
         reference = ReferenceGenome(args.fasta)
 
         base_mods = BaseModifications(fast5, bam, reference, args)
 
-        base_mod_vals = base_mods.filter_modifications_by_prob()
-        print(base_mod_vals)
+        if args.index:
+            base_mods.filter_modifications_by_prob().to_csv(args.output, sep="\t")
+
+        base_mods.map_methylation_signal()
 
 
         # include_flounder(args)

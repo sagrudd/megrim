@@ -35,12 +35,13 @@ import pyranges as pr
 
 class BaseModifications(Flounder):
 
-    def __init__(self, fast5, bam, reference, args):
+    def __init__(self, fast5, bam, reference, args=None):
         Flounder.__init__(self)
-        if isinstance(args, argparse.Namespace):
-            self.argparse(args)
-        if isinstance(args, dict):
-            self.dictparse(args)
+        if args is not None:
+            if isinstance(args, argparse.Namespace):
+                self.argparse(args)
+            if isinstance(args, dict):
+                self.dictparse(args)
 
         self.fast5 = fast5
         self.reference = reference
@@ -140,12 +141,107 @@ class BaseModifications(Flounder):
                 flounder.write_cache(self.index, f_modifications)
         return f_modifications
 
+    def map_methylation_signal(self, force=False):
+        logging.info("Mapping methylation signals")
 
+        if not force:
+            chr_mapped_reads = self.read_cache(self.index, pd.DataFrame())
 
+        if chr_mapped_reads is None:
+            chr_mapped_reads = []
 
+            modifications = self.filter_modifications_by_prob(force=force)
 
+            for bam_chunk in self.bam.chunk_generator():
+                chromosome = bam_chunk.iloc[0].reference_name
+                block_start = bam_chunk.iloc[0].block_start
+                block_end = bam_chunk.iloc[0].block_end
+                fasta = list(self.reference.get_whole_sequence(chromosome))
 
+                mapped_read_chunk = self.map_methylation_signal_chunk(bam_chunk, modifications)
 
+                logging.debug("cleaning up mapped_methylation dataset")
+                mapped_read_chunk = mapped_read_chunk.loc[
+                    mapped_read_chunk.pos.notna()]
+                mapped_read_chunk = mapped_read_chunk.astype(
+                    dtype={"pos": "int32", "fwd": "int32",
+                           "rev": "int32", "prob": "float32"})
+
+                # since the reads that span the target region extend beyond the boundaries of
+                # the target, we should clip the read set to include basemod loci that fall
+                # within the canonical boundaries
+                logging.debug("removing off target content")
+                mapped_read_chunk = mapped_read_chunk.loc[
+                    (mapped_read_chunk.pos >= block_start) &
+                    (mapped_read_chunk.pos < block_end)]
+
+                # the reference base calling was dropped earlier due to resources
+                # and parallelisation - let's put back the reference bases ...
+                logging.debug("adding reference sequence base")
+                bases = [fasta[x] for x in mapped_read_chunk.pos.tolist()]
+                mapped_read_chunk['ref_base'] = bases
+
+                # and augment these information with some additional context
+                # relating to depth of coverage and strandedness
+                logging.debug("calculating pyranges")
+                rle = pr.PyRanges(chromosomes=bam_chunk.reference_name,
+                                  starts=bam_chunk.reference_start,
+                                  ends=bam_chunk.reference_end,
+                                  strands=bam_chunk.strand).to_rle(strand=True)
+
+                mapped_read_chunk['fwd_cov'] = rle[chromosome, "+"][mapped_read_chunk.pos]
+                mapped_read_chunk['rev_cov'] = rle[chromosome, "-"][mapped_read_chunk.pos]
+                logging.debug(mapped_read_chunk)
+
+                chr_mapped_reads.append(mapped_read_chunk)
+
+            chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
+            logging.debug(chr_mapped_reads)
+
+            self.write_cache(self.index, chr_mapped_reads)
+        return chr_mapped_reads
+
+    def map_methylation_signal_chunk(self, bam_chunk, modifications, force=False, processes=None):
+
+        chromosome = bam_chunk.iloc[0].reference_name
+        block_start = bam_chunk.iloc[0].block_start
+        block_end = bam_chunk.iloc[0].block_end
+        bam_hash = hashlib.md5(f"{chromosome} {block_start} {block_end}".encode()).hexdigest()[0:7]
+
+        if not force:
+            methylation_chunk = self.read_cache(self.index, pd.DataFrame(), bam_hash)
+
+        if methylation_chunk is None:
+            if processes is None:
+                processes = self.thread_processes
+
+            methylation_chunk = []
+            # perform an inner join on the datasets ...
+            bam_chunk = bam_chunk.join(modifications, how="inner")
+            keys = bam_chunk["read_id"].unique()
+
+            with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=processes) as pool:
+                future_list = []
+                for key in tqdm(keys):
+                    read_chunk = bam_chunk.loc[key, :]
+                    # mung_bam_variant(read_chunk)
+                    future = pool.submit(
+                        mung_bam_variant,
+                        read_chunk)
+                    future_list.append(future)
+                # print("future list has {} members".format(len(future_list)))
+                for future in tqdm(concurrent.futures.as_completed(future_list), total=len(future_list)):
+                    bam_mapped = future.result()
+                    for row in bam_mapped:
+                        methylation_chunk.append(row)
+
+            methylation_chunk = pd.DataFrame(
+                methylation_chunk,
+                columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
+            methylation_chunk.set_index("read_id", drop=False, inplace=True)
+            self.write_cache(self.index, methylation_chunk, bam_hash)
+        return methylation_chunk
 
 
 def include_flounder(args):
@@ -197,6 +293,7 @@ def lfast5_basemods_to_df(read, latest_basecall, modification, context):
 
 
 
+
 def lfast5_to_basemods(fast5file, modification, context, force=False):
     print(fast5file)
     result = None
@@ -240,72 +337,6 @@ def lfast5_to_basemods(fast5file, modification, context, force=False):
 
 
 
-
-def extract_bam_chunk(bam, chromosome, start, end, force=False):
-    """
-    Extract minimal bam associated annotation for given coordinates.
-
-    This method will parse bamfile, bam, and return a pandas DataFrame
-    containing key observations to facilitate a base-modification workflow.
-
-    Parameters
-    ----------
-    bam: bam
-        An object of class bam.
-    chromosome: Str
-        The chromosome object of interest.
-    start: int
-        start position in chromosome.
-    end: int
-        The chromosomal end position
-    force: boolean, optional
-        Whether to force the analysis, or whether to allow for a cached result
-        to be returned. The default is False.
-
-    Returns
-    -------
-    data: pd.DataFrame
-        Pandas DataFrame containing the parsed entries.
-
-    """
-    # recover the cached data if possible
-    if (not force) & ("flounder" in globals()):
-        data = flounder.read_cache(
-            bam.bam, pd.DataFrame(), chromosome, start, end)
-    if data is None:
-        data = []
-        # extract reads from a bam file
-        reads = bam.get_sam_core(chromosome, start, end)
-        for read in reads:
-            # select primary mappings only
-            if not any([read.is_secondary, read.is_supplementary,
-                        read.is_qcfail, read.is_duplicate]):
-                # and select facets as required for basemodification workflow
-                # row = pd.Series({"query_name": read.query_name,
-                #                  "query_length": read.query_length,
-                #                  "reference_name": read.reference_name,
-                #                  "reference_start": read.reference_start,
-                #                  "strand": "-" if read.is_reverse else "+",
-                #                  "cigar": read.cigartuples})
-                # creating just a list rather than a pd.Series could be faster???
-                row = [read.query_name, read.query_length, read.reference_name,
-                       read.reference_start, read.reference_end,
-                       "-" if read.is_reverse else "+", read.cigartuples]
-                data.append(row)
-
-        # convert data into a DataFrame
-        data = pd.DataFrame(
-            data,
-            columns=["query_name", "query_length", "reference_name",
-                     "reference_start", "reference_end", "strand", "cigar"])
-        data['block_start'] = start
-        data['block_end'] = end
-
-        # prettify the data
-        data.set_index("query_name", drop=False, inplace=True)
-        if "flounder" in globals():
-            flounder.write_cache(bam.bam, data, chromosome, start, end)
-    return data
 
 
 def mung_bam_variant(rows, monly=True):
@@ -357,145 +388,10 @@ def mung_bam_variant(rows, monly=True):
         ref_pos = ref_pos + reference_start
         return rows.iloc[0].read_id, chromosome, ref_pos, operation, prob, int(strand == "+"), int(strand == "-"), contexts
 
-    mapped = list(map(anchor_base, rows.position, rows.strand, rows.reference_start, rows.query_length, rows.contexts, rows[modification]))
-    # mapped = pd.DataFrame(mapped, columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
-    # # remove the potentially fubar columns
-    # if monly:
-    #     mapped = mapped.loc[mapped.op == "M"]
-    # else:
-    #     mapped = mapped.loc[mapped.op != "?"]
-    # # set the index for read_id
-    # # mapped.set_index("read_id", drop=False, inplace=True)
-    return mapped
+    return list(map(anchor_base, rows.position, rows.strand, rows.reference_start, rows.query_length, rows.contexts, rows[modification]))
 
 
-def map_methylation_signal_chunk(bam_chunk, modifications, force=False, processes=None):
-     #   ref, bam, modifications, chromosome, start, end, force=False, processes=None):
 
-    modifications_hash = hashlib.md5(
-        str(
-            len(modifications.index)).join(
-                modifications.index.unique()).encode()).hexdigest()[0:7]
-    bam_hash = hashlib.md5(
-        str(
-            len(bam_chunk.query_name)).join(
-                bam_chunk.query_name).encode()).hexdigest()[0:7]
-    
-    if (not force) & ("flounder" in globals()):
-        methylation_chunk = flounder.read_cache(
-            "bam.bam", pd.DataFrame(), modifications_hash, bam_hash)
-
-    if methylation_chunk is None:
-        if processes is None:
-            if ("flounder" in globals()) & (flounder.args is not None):
-                processes = flounder.args.threads
-            else:
-                processes = multiprocessing.cpu_count()
-            logging.debug(f"Thread count set to [{processes}]")
-        
-        methylation_chunk = []
-        # perform an inner join on the datasets ...
-        bam_chunk = bam_chunk.join(modifications, how="inner")
-        keys = bam_chunk["read_id"].unique()
-
-        with concurrent.futures.ProcessPoolExecutor(
-                max_workers=processes) as pool:
-            future_list = []
-            for key in tqdm(keys):
-                read_chunk = bam_chunk.loc[key, :]
-                # mung_bam_variant(read_chunk)
-                future = pool.submit(
-                    mung_bam_variant,
-                    read_chunk)
-                future_list.append(future)
-            # print("future list has {} members".format(len(future_list)))
-            for future in tqdm(concurrent.futures.as_completed(future_list), total=len(future_list)):
-                bam_mapped = future.result()
-                for row in bam_mapped:
-                    methylation_chunk.append(row)
-
-        methylation_chunk = pd.DataFrame(
-            methylation_chunk,
-            columns=["read_id", "chromosome", "pos", "op", "prob", "fwd", "rev", "seq_context"])
-        methylation_chunk.set_index("read_id", drop=False, inplace=True)
-        if "flounder" in globals():
-            flounder.write_cache(
-                "bam.bam", methylation_chunk, modifications_hash, bam_hash)
-    return methylation_chunk
-
-
-def map_methylation_signal(ref, bam, modifications, force=False):
-    logging.info("Mapping methylation signals")
-    
-    data_hash = hashlib.md5(
-        str(
-            len(modifications.index)).join(
-                modifications.index.unique()).encode()).hexdigest()
-    
-    if (not force) & ("flounder" in globals()):
-        chr_mapped_reads = flounder.read_cache(
-            bam.bam, pd.DataFrame(), data_hash)
-    if chr_mapped_reads is None:
-
-        chr_mapped_reads = []
-
-        for bam_chunk in bam_chunk_generator(ref, bam):
-            chromosome = bam_chunk.iloc[0].reference_name
-            block_start = bam_chunk.iloc[0].block_start
-            block_end = bam_chunk.iloc[0].block_end
-            fasta = list(ref.get_whole_sequence(chromosome))
-
-            mapped_read_chunk = map_methylation_signal_chunk(bam_chunk, modifications)
-
-            logging.debug("cleaning up mapped_mewthylation dataset")
-            mapped_read_chunk = mapped_read_chunk.loc[
-                mapped_read_chunk.pos.notna()]
-            mapped_read_chunk = mapped_read_chunk.astype(
-                dtype={"pos": "int32", "fwd": "int32",
-                       "rev": "int32", "prob": "float32"})
-
-            # since the reads that span the target region extend beyond the boundaries of
-            # the target, we should clip the read set to include basemod loci that fall
-            # within the canonical boundaries
-            logging.debug("removing off target content")
-            mapped_read_chunk = mapped_read_chunk.loc[
-                (mapped_read_chunk.pos >= block_start) &
-                (mapped_read_chunk.pos < block_end)]
-
-            # the reference base calling was dropped earlier due to resources
-            # and parallelisation - let's put back the reference bases ...
-            logging.debug("adding reference sequence base")
-            bases = [fasta[x] for x in mapped_read_chunk.pos.tolist()]
-            mapped_read_chunk['ref_base'] = bases
-
-            # and augment these information with some additional context
-            # relating to depth of coverage and strandedness
-            logging.debug("calculating pyranges")
-            rle = pr.PyRanges(chromosomes=bam_chunk.reference_name,
-                                  starts=bam_chunk.reference_start,
-                                  ends=bam_chunk.reference_end,
-                                  strands=bam_chunk.strand).to_rle(strand=True)
-
-            mapped_read_chunk['fwd_cov'] = rle[chromosome, "+"][mapped_read_chunk.pos]
-            mapped_read_chunk['rev_cov'] = rle[chromosome, "-"][mapped_read_chunk.pos]
-            logging.debug(mapped_read_chunk)
-
-            chr_mapped_reads.append(mapped_read_chunk)
-
-        chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
-        logging.debug(chr_mapped_reads)
-        # chr_mapped_reads['A'] = 0
-        # chr_mapped_reads['C'] = 0
-        # chr_mapped_reads['G'] = 0
-        # chr_mapped_reads['T'] = 0
-        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "A", "A"] = 1
-        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "C", "C"] = 1
-        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "G", "G"] = 1
-        # chr_mapped_reads.loc[chr_mapped_reads.ref_base == "T", "T"] = 1
-        if "flounder" in globals():
-            flounder.write_cache(
-                bam.bam, chr_mapped_reads, data_hash)
-    return chr_mapped_reads
 
 
 def reduce_mapped_methylation_signal(dataframe, force=False):
