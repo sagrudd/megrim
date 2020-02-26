@@ -24,27 +24,29 @@ class BaseModifications(MegrimPlugin):
 
         modifications = fast5s_to_basemods(args.fast5, modification=args.modifcation,
                                            threshold=args.probability, context=args.context)
-        modifications.set_index("read_id", drop=False, inplace=True)
         # print out the modifications - quick reality check
         print(modifications)
 
-        # define a reference genome and bam file
-        reference = ReferenceGenome(args.fasta)
-        bam = BamHandler(args.bam)
+        if args.index:
+            modifications.to_csv(args.output, sep="\t")
+        else:
+            # define a reference genome and bam file
+            reference = ReferenceGenome(args.fasta)
+            bam = BamHandler(args.bam)
 
-        pd.set_option("display.max_columns", None)
-        pd.set_option("display.expand_frame_repr", False)
-        pd.set_option("max_colwidth", -1)
+            pd.set_option("display.max_columns", None)
+            pd.set_option("display.expand_frame_repr", False)
+            pd.set_option("max_colwidth", -1)
 
-        # associated mapped bases with the available modifications
-        methylation_signal = map_methylation_signal(reference, bam, modifications)
-        logging.info(methylation_signal)
+            # associated mapped bases with the available modifications
+            methylation_signal = map_methylation_signal(reference, bam, modifications)
+            logging.info(methylation_signal)
 
-        reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
-        # reindex the dataset ... the indices are from an earlier aggregation step ...
-        reduced_reads.reset_index(["chromosome", "pos"], drop=True, inplace=True)
-        # we should save this "result-file" as a deliverable
-        reduced_reads.to_csv(args.output, sep="\t")
+            reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
+            # reindex the dataset ... the indices are from an earlier aggregation step ...
+            reduced_reads.reset_index(["chromosome", "pos"], drop=True, inplace=True)
+            # we should save this "result-file" as a deliverable
+            reduced_reads.to_csv(args.output, sep="\t")
         # fin
 
     def arg_params(self, subparsers, parent_parser):
@@ -65,6 +67,8 @@ class BaseModifications(MegrimPlugin):
         argparser.add_argument('-m', '--modification', metavar="[5mC|6mA]", action='store',
                                help='The base modification to score for - this may be either 5mC or 6mA in this '
                                     'version of the software. [The default is 5mC]', dest="modifcation", default="5mC")
+        argparser.add_argument('-x', '--index', action='store_true', dest="index",
+                               help="only index the FAST5; do not process the bam files.", default=False)
         argparser.add_argument('-o', '--output', metavar="results-file", action='store', dest="output", required=True,
                                help="file path to a file location where the results will be stored. The results will "
                                     "be stored in a TSV format.")

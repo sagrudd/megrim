@@ -224,6 +224,7 @@ def fast5s_to_basemods(
             result.append(basemods)
 
     result = pd.concat(result, sort=False)
+    result.set_index("read_id", drop=False, inplace=True)
     if "flounder" in globals():
         flounder.write_cache(
             hashlib.md5(path.encode()).hexdigest()[0:7], result, modification, threshold, context)
@@ -385,6 +386,7 @@ def map_methylation_signal_chunk(bam_chunk, modifications, force=False, processe
         methylation_chunk = []
         # perform an inner join on the datasets ...
         bam_chunk = bam_chunk.join(modifications, how="inner")
+        print(bam_chunk)
         keys = bam_chunk["read_id"].unique()
 
         with concurrent.futures.ProcessPoolExecutor(

@@ -55,7 +55,8 @@ def process_fastq(file):
         try:
             # for record in SeqIO.parse(f, 'fastq'):
             #    sys.stdout.write(record.format("fastq"))
-            sys.stdout.write(f.readline())
+            for line in f:
+                sys.stdout.write(line)
         finally:
             try:
                 sys.stdout.flush()
