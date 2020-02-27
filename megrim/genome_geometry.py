@@ -283,10 +283,29 @@ class BamHandler(Flounder):
         return self.handle_output(p, plot_type)
 
     def chunk_generator(self, tile_size=5000000, force=False):
+        """
+        Prepare a chunk generator of BAM content across whole genome.
 
+        For whole-genome analysis, it makes sense to process BAM files in
+        chunks of content - this can enable both memory tractability for
+        tutorials and can enable robust parallelisation for other scenarios.
+        This method will consume the BAM file and emit chunks of salient
+        content for parsing by calling functions.
+
+        Parameters
+        ----------
+        tile_size : TYPE, optional
+            DESCRIPTION. The default is 5000000.
+        force : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Yields
+        ------
+        bam_chunk: pandas.DataFrame
+            DataFrame where each row corresponds to a mapped sequence entry.
+
+        """
         map = self.bam_index_tiled_ranges(tile_size=tile_size)
-        print(map)
-
         for i in map.df.index:
             chromo = map.df.iloc[i].Chromosome
             start = map.df.iloc[i].Start
@@ -295,7 +314,6 @@ class BamHandler(Flounder):
                 f"extracting reads from chromosome {chromo} chunk {i+1}/{len(map.df.index)} [{start}:{end}]")
             bam_chunk = self.extract_bam_chunk(chromo, start, end, force)
             yield bam_chunk
-
 
     def extract_bam_chunk(self, chromosome, start, end, force=False):
         """
@@ -315,8 +333,8 @@ class BamHandler(Flounder):
         end: int
             The chromosomal end position
         force: boolean, optional
-            Whether to force the analysis, or whether to allow for a cached result
-            to be returned. The default is False.
+            Whether to force the analysis, or whether to allow for a cached
+            result to be returned. The default is False.
 
         Returns
         -------
@@ -326,7 +344,8 @@ class BamHandler(Flounder):
         """
         # recover the cached data if possible
         if not force:
-            data = self.read_cache(self.bam, pd.DataFrame(), chromosome, start, end)
+            data = self.read_cache(
+                self.bam, pd.DataFrame(), chromosome, start, end)
 
         if data is None:
             data = []
@@ -336,15 +355,17 @@ class BamHandler(Flounder):
                 # select primary mappings only
                 if not any([read.is_secondary, read.is_supplementary,
                             read.is_qcfail, read.is_duplicate]):
-                    row = [read.query_name, read.query_length, read.reference_name,
-                           read.reference_start, read.reference_end,
-                           "-" if read.is_reverse else "+", read.cigartuples]
+                    row = [read.query_name, read.query_length,
+                           read.reference_name, read.reference_start,
+                           read.reference_end, "-" if read.is_reverse else "+",
+                           read.cigartuples]
                     data.append(row)
             # convert data into a DataFrame
             data = pd.DataFrame(
                 data,
                 columns=["query_name", "query_length", "reference_name",
-                         "reference_start", "reference_end", "strand", "cigar"])
+                         "reference_start", "reference_end", "strand",
+                         "cigar"])
             data['block_start'] = start
             data['block_end'] = end
             # prettify the data
@@ -353,10 +374,37 @@ class BamHandler(Flounder):
         return data
 
     def get_bam_coverage(self):
+        """
+        Return BAM coverage information in PyRanges format.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         logging.debug("Extracting BAM coverage")
         return self.get_bam_ranges().to_rle(strand=False)
 
     def get_sam_reads(self, chromosome, start, end):
+        """
+        Get SAM sequence reads from defined genomic interval.
+
+        Parameters
+        ----------
+        chromosome : TYPE
+            DESCRIPTION.
+        start : TYPE
+            DESCRIPTION.
+        end : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        result : TYPE
+            DESCRIPTION.
+
+        """
         # logging.info("getSamReads ({}) {}:{}".format(chromosome, start, end))
         result = None
         try:
@@ -366,10 +414,46 @@ class BamHandler(Flounder):
         return result
 
     def get_sam_core(self, chromosome, start, end):
+        """
+        Get SAM core.
+
+        Parameters
+        ----------
+        chromosome : TYPE
+            DESCRIPTION.
+        start : TYPE
+            DESCRIPTION.
+        end : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        annot : TYPE
+            DESCRIPTION.
+
+        """
         annot = self.get_sam_reads(chromosome, start, end)
         return annot
 
     def get_sam_annotation(self, chromosome, start, end):
+        """
+        Get SAM annotation.
+
+        Parameters
+        ----------
+        chromosome : TYPE
+            DESCRIPTION.
+        start : TYPE
+            DESCRIPTION.
+        end : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         annot = self.get_sam_reads(chromosome, start, end)
         if annot is None:
             return None

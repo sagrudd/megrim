@@ -1,4 +1,6 @@
 """
+Module to enable base-modification analyses for tutorial framework.
+
 The intention of this module is to provide functionality to parse FAST5
 files to replicate the earlier R-based functionality aiming to demystify
 the processes of base-modification calling. This is based on the ont-fast5-api
