@@ -50,7 +50,9 @@ class BaseModificationsPlugin(MegrimPlugin):
         fast5 = args.fast5
         bam = BamHandler(args.bam, args)
         reference = ReferenceGenome(args.fasta)
-        base_mods = BaseModifications(fast5, bam, reference, args)
+        base_mods = BaseModifications(
+            fast5, bam, reference, modification=args.modification,
+            threshold=args.threshold, context=args.context, args=args)
         if args.index:
             logging.degug(
                 f"saving base-mod coordinates to CSV file [{args.output}]")

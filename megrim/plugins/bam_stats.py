@@ -10,6 +10,8 @@ module for information on the plugin requirements.
 from megrim.environment import MegrimPlugin
 from megrim.genome_geometry import BamHandler, include_flounder
 import warnings
+import multiprocessingimport 
+import os
 
 
 class BamStats(MegrimPlugin):
@@ -43,6 +45,7 @@ class BamStats(MegrimPlugin):
         include_flounder(args)
 
         warnings.simplefilter(action='ignore', category=FutureWarning)
+        os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
         bam = BamHandler(args.bam)
         map_stats = bam.mapping_summary()

@@ -31,7 +31,8 @@ import pyranges as pr
 class BaseModifications(Flounder):
     """A class to perform base modification extraction from FAST5 context."""
 
-    def __init__(self, fast5, bam, reference, args=None):
+    def __init__(self, fast5, bam, reference, modification="5mC", 
+                 threshold=0.85, context = "CG", args=None):
         Flounder.__init__(self)
         if args is not None:
             if isinstance(args, argparse.Namespace):
@@ -44,9 +45,9 @@ class BaseModifications(Flounder):
         self.fast5 = fast5
         self.reference = reference
         self.bam = bam
-        self.modification = "5mC"
-        self.threshold = 0.85
-        self.context = "CG"
+        self.modification = modification
+        self.threshold = threshold
+        self.context = context
         self.index = hashlib.md5(
                     f" {self.fast5} {self.reference.fasta.filename} "
                     "{self.bam.bam} {self.modification} {self.context} "
