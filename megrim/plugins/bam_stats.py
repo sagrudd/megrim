@@ -45,7 +45,8 @@ class BamStats(MegrimPlugin):
         warnings.simplefilter(action='ignore', category=FutureWarning)
 
         bam = BamHandler(args.bam)
-        print(bam.mapping_summary())
+        map_stats = bam.mapping_summary()
+        map_stats.to_csv(args.output, sep="\t")
 
     def arg_params(self, subparsers, parent_parser):
         """
@@ -75,3 +76,8 @@ class BamStats(MegrimPlugin):
             '-b', '--bam', metavar="/path/to/BAM", action='store',
             help='Path to the BAM-format mapping file', required=True,
             dest="bam")
+        argparser.add_argument(
+            '-o', '--output', metavar="results-file", action='store',
+            dest="output", required=True, help='file path to a file location '
+            'where the results will be stored. The results will be stored in '
+            'a TSV format.')
