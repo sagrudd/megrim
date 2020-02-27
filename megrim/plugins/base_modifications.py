@@ -1,5 +1,5 @@
 from megrim.environment import MegrimPlugin
-from megrim.base_modifications import BaseModifications, include_flounder, lfast5_to_basemods
+from megrim.base_modifications import BaseModifications
 from megrim.reference_genome import ReferenceGenome
 from megrim.genome_geometry import BamHandler
 import pandas as pd
@@ -17,58 +17,19 @@ class BaseModificationsPlugin(MegrimPlugin):
     def execute(self, args):
         warnings.simplefilter(action='ignore', category=FutureWarning)
         os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
-
-        include_flounder(args)
-
         fast5 = args.fast5
         bam = BamHandler(args.bam, args)
         reference = ReferenceGenome(args.fasta)
-
         base_mods = BaseModifications(fast5, bam, reference, args)
-
         if args.index:
-            base_mods.filter_modifications_by_prob().to_csv(args.output, sep="\t")
+            logging.degug(f"saving base-mod coordinates to CSV file [{args.output}]")
+            base_mods.fast5s_to_basemods().to_csv(args.output, sep="\t")
+        else:
+            logging.debug(f"saving data as CSV file [{args.output}]")
+            base_mods.reduce_mapped_methylation_signal().to_csv(args.output, sep="\t", index=False, chunksize=1e6)
+            # use the chunksize here = from default (None) to 1e6 reduces run time by ~ 15X
+        logging.debug(f"fin ...")
 
-        base_mods.map_methylation_signal()
-
-
-        # include_flounder(args)
-        #
-        # warnings.simplefilter(action='ignore', category=FutureWarning)
-        # # set NUMEXPR_MAX_THREADS environment variable to prevent numpy logging
-        # os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
-        #
-        # modifications = fast5s_to_basemods(args.fast5, modification=args.modifcation,
-        #                                    threshold=0, context=args.context)
-        #
-        # index = f"{os.path.basename(args.bam)}_{args.probability}_{args.modifcation}_{args.context}"
-        # modifications = filter_modifications_by_prob(modifications, threshold=args.probability, index=index)
-        #
-        # # threshold=args.probability
-        # # print out the modifications - quick reality check
-        # print(modifications)
-        #
-        # if args.index:
-        #     modifications.to_csv(args.output, sep="\t")
-        # else:
-        #     # define a reference genome and bam file
-        #     reference = ReferenceGenome(args.fasta)
-        #     bam = BamHandler(args.bam)
-        #
-        #     pd.set_option("display.max_columns", None)
-        #     pd.set_option("display.expand_frame_repr", False)
-        #     pd.set_option("max_colwidth", -1)
-        #
-        #     # associated mapped bases with the available modifications
-        #     methylation_signal = map_methylation_signal(reference, bam, modifications)
-        #     logging.info(methylation_signal)
-        #
-        #     reduced_reads = reduce_mapped_methylation_signal(methylation_signal)
-        #     # reindex the dataset ... the indices are from an earlier aggregation step ...
-        #     reduced_reads.reset_index(["chromosome", "pos"], drop=True, inplace=True)
-        #     # we should save this "result-file" as a deliverable
-        #     reduced_reads.to_csv(args.output, sep="\t")
-        # # fin
 
     def arg_params(self, subparsers, parent_parser):
         argparser = subparsers.add_parser(self.tool, help="base modifications help", parents=[parent_parser])

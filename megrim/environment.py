@@ -238,12 +238,14 @@ class Flounder:
                 with warnings.catch_warnings():
                     logging.debug(f"importing data from cache file {filename} as {format}...")
                     if format == "pickle":
-                        return pd.read_pickle(filename)
+                        loaded = pd.read_pickle(filename)
                     elif format == "tsv":
-                        return pd.read_csv(
+                        loaded = pd.read_csv(
                             filename, sep="\t", index_col=0, low_memory=False)
                     else:
                         raise ValueError(f"No method available for exporting type == {format}")
+                    logging.debug(f"loaded {filename} as {format}...")
+                    return loaded
             else:
                 raise ValueError(
                     "No handler for processing datatype {}".format(
@@ -312,7 +314,7 @@ class Flounder:
         return self.get_cached_data(
             method=str(getframeinfo(currentframe().f_back).function),
             source=source,
-            parameters="_".join(map(str, args)),
+            parameters="_".join(map(str, args)) if len(args) > 0 else "mgrm",
             datatype=object_example)
 
 
@@ -320,7 +322,7 @@ class Flounder:
         return self.set_cached_data(
             method=str(getframeinfo(currentframe().f_back).function),
             source=source,
-            parameters="_".join(map(str, args)),
+            parameters="_".join(map(str, args)) if len(args) > 0 else "mgrm",
             datatype=object_example)
 
         
@@ -328,7 +330,6 @@ class Flounder:
 def get_megrim_version():
     try:
         distribution = get_distribution("megrim")
-        #print("%s(%s)" % (distribution.key, distribution.version))
         print()
         return distribution.version
     except:

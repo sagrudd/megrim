@@ -42,6 +42,7 @@ class BaseModifications(Flounder):
                 self.argparse(args)
             if isinstance(args, dict):
                 self.dictparse(args)
+            include_flounder(args)  # functions in module but outside of class may require these info - cache
 
         self.fast5 = fast5
         self.reference = reference
@@ -243,6 +244,20 @@ class BaseModifications(Flounder):
             self.write_cache(self.index, methylation_chunk, bam_hash)
         return methylation_chunk
 
+    def reduce_mapped_methylation_signal(self, force=False):
+        logging.info("reduce_mapped_methylation_signal")
+        df = None
+        if not force:
+            df = self.read_cache(self.index, pd.DataFrame())
+        if df is None:
+            dataframe = self.map_methylation_signal(force=force)
+            df = dataframe.groupby(["chromosome", "pos"]).agg(
+                {"chromosome": "first", "pos": "first", "prob": np.mean,
+                 "fwd": np.sum, "rev": np.sum, "seq_context": "first",
+                 "ref_base": "first", "fwd_cov": "first", "rev_cov": "first"})
+            self.write_cache(self.index, df)
+        return df
+
 
 def include_flounder(args):
     # setup a Flounder for this workflow ...
@@ -339,27 +354,8 @@ def lfast5_to_basemods(fast5file, modification, context, force=False):
 
 
 
-def mung_bam_variant(rows, monly=True):
-    """
-    Sync a base-modification variant with FAST5 base modification data.
+def mung_bam_variant(rows):
 
-    Parameters
-    ----------
-    row : TYPE
-        DESCRIPTION.
-    ref : TYPE
-        DESCRIPTION.
-    chromosome : TYPE
-        DESCRIPTION.
-    modification : TYPE
-        DESCRIPTION.
-
-    Returns
-    -------
-    results : TYPE
-        DESCRIPTION.
-
-    """
     if isinstance(rows, pd.Series):
         rows = pd.DataFrame(rows).T
     # fix the modification column name
@@ -393,25 +389,5 @@ def mung_bam_variant(rows, monly=True):
 
 
 
-
-def reduce_mapped_methylation_signal(dataframe, force=False):
-    logging.info("reduce_mapped_methylation_signal")
-    data_hash = hashlib.md5(
-        str(
-            len(dataframe.index)).join(
-                dataframe.index.unique()).encode()).hexdigest()
-    df = None
-    if (not force) & ("flounder" in globals()):
-        df = flounder.read_cache(
-            data_hash, pd.DataFrame())
-    if df is None:
-        df = dataframe.groupby(["chromosome", "pos"]).agg(
-                {"chromosome": "first", "pos": "first", "prob": np.mean,
-                 "fwd": np.sum, "rev": np.sum, "seq_context": "first",
-                 "ref_base": "first", "fwd_cov": "first", "rev_cov": "first"})
-        if "flounder" in globals():
-            flounder.write_cache(
-                data_hash, df)
-    return df
 
 
