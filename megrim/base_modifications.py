@@ -225,8 +225,20 @@ class BaseModifications(Flounder):
                 # should we also consider reference context since there are
                 # a lot of base assignments where read context != reference
                 # context, even with depth-of-coverage?
-                ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
-                               for x in mapped_read_chunk.pos.tolist()]
+                def extract_reference_context(position, reverse, offset=0):
+                    start = int(position)-int(reverse)
+                    end = int(position)-int(reverse)+len(self.context)+1
+                    ref_context = fasta[start:end]
+                    return ref_context
+                        
+    
+                
+                
+                #ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
+                #               for x in mapped_read_chunk.pos.tolist()]
+                
+                ref_context = extract_reference_context(mapped_read_chunk.pos, mapped_read_chunk.rev)
+                
                 mapped_read_chunk['ref_context'] = ref_context
 
                 chr_mapped_reads.append(mapped_read_chunk)
