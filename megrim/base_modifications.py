@@ -266,9 +266,12 @@ class BaseModifications(Flounder):
                 mapped_read_chunk = mapped_read_chunk.loc[
                     mapped_read_chunk['ref_context'] == self.context]
 
-                chr_mapped_reads.append(mapped_read_chunk)
+                # and expand the reference context string just a little
+                mapped_read_chunk['ref_context'] = list(
+                    map(extract_reference_context, mapped_read_chunk.pos,
+                        mapped_read_chunk.rev, offset=5, rev_comp=False))
 
-                logging.debug("--- LOGGING ONLY ---")
+                chr_mapped_reads.append(mapped_read_chunk)
                 logging.debug(mapped_read_chunk)
 
             chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
