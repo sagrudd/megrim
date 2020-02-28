@@ -114,7 +114,7 @@ class BaseModificationsPlugin(MegrimPlugin):
             '-m', '--modification', metavar="[5mC|6mA]", action='store',
             help='The base modification to score for - this may be either 5mC '
             'or 6mA in this version of the software. [The default is 5mC]',
-            dest="modifcation", default="5mC")
+            dest="modification", default="5mC")
         argparser.add_argument(
             '-x', '--index', action='store_true', dest="index",
             help="only index the FAST5; do not process the bam files.",
