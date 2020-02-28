@@ -229,6 +229,9 @@ class BaseModifications(Flounder):
                 mapped_read_chunk['ref_context'] = ref_context
 
                 chr_mapped_reads.append(mapped_read_chunk)
+                
+                logging.debug("--- LOGGING ONLY ---")
+                logging.debug(mapped_read_chunk)
 
             chr_mapped_reads = pd.concat(chr_mapped_reads, sort=False)
             logging.debug(chr_mapped_reads)
