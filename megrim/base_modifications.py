@@ -197,6 +197,11 @@ class BaseModifications(Flounder):
                     dtype={"pos": "int32", "fwd": "int32",
                            "rev": "int32", "prob": "float32"})
 
+                # the mapping results may contain basemods that are derived
+                # from mapping events other than match - nuke them (initially)
+                mapped_read_chunk = mapped_read_chunk.loc[
+                    mapped_read_chunk.op == "M"]
+
                 # since the reads that span the target region extend beyond
                 # the boundaries of the target, we should clip the read set to
                 # include basemod loci that fall within canonical boundaries
@@ -226,25 +231,40 @@ class BaseModifications(Flounder):
                 # should we also consider reference context since there are
                 # a lot of base assignments where read context != reference
                 # context, even with depth-of-coverage?
-                def extract_reference_context(position, reverse, offset=0, rev_comp=True):                        
+                def extract_reference_context(
+                        position, reverse, offset=0, rev_comp=True):
                     start = int(position)
                     end = int(position)+len(self.context)
                     if reverse == 1:
                         # adjust coordinates ...
-                        end = position + 1
-                        start = position - len(self.context) + 1
-                    ref_context = "".join(fasta[start:end])
+                        end = int(position) + 1
+                        start = int(position) - len(self.context) + 1
+                    if offset > 0:
+                        ref_context = "{}[{}]{}".format(
+                            "".join(fasta[max(start-offset, 0):start]),
+                            "".join(fasta[start:end]),
+                            "".join(fasta[end:min(end+offset, len(fasta))]))
+                    else:
+                        ref_context = "".join(fasta[start:end])
                     if (reverse == 1) & rev_comp:
                         # reverse complement ...
-                        ref_context = str(Seq(ref_context).reverse_complement())
+                        ref_context = str(
+                            Seq(ref_context).reverse_complement())
                     return ref_context
 
-                #ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
+                # ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
                 #               for x in mapped_read_chunk.pos.tolist()]
 
-                ref_context = list(map(extract_reference_context, mapped_read_chunk.pos, mapped_read_chunk.rev))
+                ref_context = list(
+                    map(extract_reference_context, mapped_read_chunk.pos,
+                        mapped_read_chunk.rev))
 
                 mapped_read_chunk['ref_context'] = ref_context
+                # strip out any of the reference contexts that are not the
+                # same as the target context - this means that we'll reject
+                # any sequence loci where subject != reference
+                mapped_read_chunk = mapped_read_chunk.loc[
+                    mapped_read_chunk['ref_context'] == self.context]
 
                 chr_mapped_reads.append(mapped_read_chunk)
 
@@ -325,7 +345,7 @@ class BaseModifications(Flounder):
             self.write_cache(self.index, methylation_chunk, bam_hash)
         return methylation_chunk
 
-    def reduce_mapped_methylation_signal(self, m_only=True, force=False):
+    def reduce_mapped_methylation_signal(self, force=False):
         """
         Reduce dimensions of basemod data from per-read to per-genomic-locus.
 
@@ -346,10 +366,6 @@ class BaseModifications(Flounder):
             df = self.read_cache(self.index, pd.DataFrame())
         if df is None:
             dataframe = self.map_methylation_signal(force=force)
-
-            if m_only:
-                # strip out any of the classified reads that are not M
-                dataframe = dataframe.loc[dataframe.op == "M"]
 
             df = dataframe.groupby(["chromosome", "pos"]).agg(
                 {"chromosome": "first", "pos": "first", "prob": np.mean,
