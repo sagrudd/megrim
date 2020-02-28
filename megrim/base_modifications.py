@@ -376,7 +376,7 @@ class BaseModifications(Flounder):
 
             df = dataframe.groupby(["chromosome", "pos"]).agg(
                 {"chromosome": "first", "pos": "first", "prob": np.mean,
-                 "fwd": np.sum, "rev": np.sum, "seq_context": "first",
+                 "fwd": np.sum, "rev": np.sum, "ref_context": "first",
                  "ref_base": "first", "fwd_cov": "first", "rev_cov": "first"})
             self.write_cache(self.index, df)
         return df
