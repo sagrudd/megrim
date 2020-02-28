@@ -231,22 +231,19 @@ class BaseModifications(Flounder):
                     end = int(position)+len(self.context)
                     if reverse == 1:
                         # adjust coordinates ...
-                        end = position - 1
-                        start = position - len(self.context) - 1
+                        end = position + 1
+                        start = position - len(self.context) + 1
                     ref_context = "".join(fasta[start:end])
                     if (reverse == 1) & rev_comp:
                         # reverse complement ...
                         ref_context = str(Seq(ref_context).reverse_complement())
                     return ref_context
-                        
-    
-                
-                
+
                 #ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
                 #               for x in mapped_read_chunk.pos.tolist()]
-                
+
                 ref_context = list(map(extract_reference_context, mapped_read_chunk.pos, mapped_read_chunk.rev))
-                
+
                 mapped_read_chunk['ref_context'] = ref_context
 
                 chr_mapped_reads.append(mapped_read_chunk)
