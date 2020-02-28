@@ -10,7 +10,7 @@ module for information on the plugin requirements.
 from megrim.environment import MegrimPlugin
 from megrim.genome_geometry import BamHandler, include_flounder
 import warnings
-import multiprocessingimport 
+import multiprocessing
 import os
 
 
