@@ -333,6 +333,11 @@ class BamHandler(Flounder):
             source=coverage_dist, top="count", bottom=0, left='start',
             right='end', fill_color='colour', line_color="white", alpha=0.7)
 
+        p.xaxis.axis_label = 'Depth-of-coverage (X)'
+        p.yaxis.axis_label = 'Frequency (bases)'
+        p.yaxis.formatter = NumeralTickFormatter(format="0,0")
+        p.grid.grid_line_color = "white"
+
         return self.handle_output(p, plot_type)
 
     def chunk_generator(self, tile_size=5000000, force=False):

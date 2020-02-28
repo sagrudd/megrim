@@ -41,7 +41,7 @@ class Flounder:
     persistence of analysis states where possible
     """
 
-    def __init__(self, plot_width=640, plot_height=480, plot_type="native",
+    def __init__(self, plot_width=640, plot_height=480, plot_type="jupyter",
                  plot_tools="save,reset", plot_dpi=96):
         self.location = None
         self.results_dir = None
