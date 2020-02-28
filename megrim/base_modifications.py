@@ -221,15 +221,16 @@ class BaseModifications(Flounder):
                 mapped_read_chunk['rev_cov'] = \
                     rle[chromosome, "-"][mapped_read_chunk.pos]
                 logging.debug(mapped_read_chunk)
-                
+
                 # should we also consider reference context since there are
                 # a lot of base assignments where read context != reference
                 # context, even with depth-of-coverage?
-                ref_context = [str(fasta[x-1:x+len(self.context)]) for x in mapped_read_chunk.pos.tolist()]
+                ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
+                               for x in mapped_read_chunk.pos.tolist()]
                 mapped_read_chunk['ref_context'] = ref_context
 
                 chr_mapped_reads.append(mapped_read_chunk)
-                
+
                 logging.debug("--- LOGGING ONLY ---")
                 logging.debug(mapped_read_chunk)
 
