@@ -26,6 +26,7 @@ import argparse
 import numpy as np
 import logging
 import pyranges as pr
+from Bio.Seq import Seq
 
 
 class BaseModifications(Flounder):
@@ -225,10 +226,17 @@ class BaseModifications(Flounder):
                 # should we also consider reference context since there are
                 # a lot of base assignments where read context != reference
                 # context, even with depth-of-coverage?
-                def extract_reference_context(position, reverse, offset=0):
-                    start = int(position)-int(reverse)
-                    end = int(position)-int(reverse)+len(self.context)+1
-                    ref_context = fasta[start:end]
+                def extract_reference_context(position, reverse, offset=0, rev_comp=True):                        
+                    start = int(position)
+                    end = int(position)+len(self.context)
+                    if reverse == 1:
+                        # adjust coordinates ...
+                        end = position
+                        start = position - len(self.context)
+                    ref_context = "".join(fasta[start:end])
+                    if (reverse == 1) & rev_comp:
+                        # reverse complement ...
+                        ref_context = str(Seq(ref_context).reverse_complement())
                     return ref_context
                         
     
