@@ -221,6 +221,12 @@ class BaseModifications(Flounder):
                 mapped_read_chunk['rev_cov'] = \
                     rle[chromosome, "-"][mapped_read_chunk.pos]
                 logging.debug(mapped_read_chunk)
+                
+                # should we also consider reference context since there are
+                # a lot of base assignments where read context != reference
+                # context, even with depth-of-coverage?
+                ref_context = [str(fasta[x-1:x+len(self.context)]) for x in mapped_read_chunk.pos.tolist()]
+                mapped_read_chunk['ref_context'] = ref_context
 
                 chr_mapped_reads.append(mapped_read_chunk)
 
@@ -298,7 +304,7 @@ class BaseModifications(Flounder):
             self.write_cache(self.index, methylation_chunk, bam_hash)
         return methylation_chunk
 
-    def reduce_mapped_methylation_signal(self, force=False):
+    def reduce_mapped_methylation_signal(self, m_only=True, force=False):
         """
         Reduce dimensions of basemod data from per-read to per-genomic-locus.
 
@@ -319,6 +325,11 @@ class BaseModifications(Flounder):
             df = self.read_cache(self.index, pd.DataFrame())
         if df is None:
             dataframe = self.map_methylation_signal(force=force)
+
+            if m_only:
+                # strip out any of the classified reads that are not M
+                dataframe = dataframe.loc[dataframe.op == "M"]
+
             df = dataframe.groupby(["chromosome", "pos"]).agg(
                 {"chromosome": "first", "pos": "first", "prob": np.mean,
                  "fwd": np.sum, "rev": np.sum, "seq_context": "first",
