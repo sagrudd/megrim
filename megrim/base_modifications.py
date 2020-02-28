@@ -231,8 +231,8 @@ class BaseModifications(Flounder):
                     end = int(position)+len(self.context)
                     if reverse == 1:
                         # adjust coordinates ...
-                        end = position
-                        start = position - len(self.context)
+                        end = position - 1
+                        start = position - len(self.context) - 1
                     ref_context = "".join(fasta[start:end])
                     if (reverse == 1) & rev_comp:
                         # reverse complement ...
