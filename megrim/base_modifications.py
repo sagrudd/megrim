@@ -269,7 +269,7 @@ class BaseModifications(Flounder):
                 # and expand the reference context string just a little
                 mapped_read_chunk['ref_context'] = list(
                     map(extract_reference_context, mapped_read_chunk.pos,
-                        mapped_read_chunk.rev, offset=5, rev_comp=False))
+                        mapped_read_chunk.rev, 5, False))
 
                 chr_mapped_reads.append(mapped_read_chunk)
                 logging.debug(mapped_read_chunk)
