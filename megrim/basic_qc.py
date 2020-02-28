@@ -50,6 +50,16 @@ class Timer():
 
 
 class SequenceSummaryHandler(Flounder):
+    """
+    This is a class for munging information within the seq_summary file.
+
+    The sequencing summary file retains key metrics from a sequencing run
+    that relates to aggregated quality information, temporal information and
+    other facets that can be used for a review of the performance of a
+    run. This class is intended to be used by Nanopore tutorials - could be
+    expanded in other directions - open to merge requests for fixes and
+    updates.
+    """
 
     def __init__(self, target_file=None, target_data=None, fcid=None):
         Flounder.__init__(self)
@@ -60,7 +70,6 @@ class SequenceSummaryHandler(Flounder):
         elif target_data is not None:
             self.seq_sum = target_data
             self.seq_sum_head = target_data.head()
-
 
     def _load_seqsum(self, file=None):
         if file is None:
@@ -88,16 +97,17 @@ class SequenceSummaryHandler(Flounder):
         # slice out the head entries for further functionality
         self.seq_sum_head = self.seq_sum.head()
 
-
     def _import_data(self):
         """
-        method parses the provided Sequencing_summary.txt file and loads 
+        Import the raw sequencing summary file; accomodate different variants.
+
+        method parses the provided Sequencing_summary.txt file and loads
         the reduced contents into memory - a DASK dataframe is used to
         allow for the scaling to large PromethION runs (or equivalent)
 
         There is a possibility of duplicate header lines; these will btreak
         the dask import
-        
+
         grep can be used to identify the line numbers - this can take a while
         on a promethion flowcell
 
@@ -106,7 +116,6 @@ class SequenceSummaryHandler(Flounder):
         None.
 
         """
-
         try:
             self._load_seqsum()
         except ValueError as verr:
@@ -121,9 +130,9 @@ class SequenceSummaryHandler(Flounder):
                 compression = "bz2"
             elif (extension in [".gzip", ".gz"]):
                 compression = "gzip"
-            
-            data = dd.read_csv(self.target_file, delimiter="\t", 
-                               compression=compression, blocksize=None, 
+
+            data = dd.read_csv(self.target_file, delimiter="\t",
+                               compression=compression, blocksize=None,
                                dtype="object")
             data = data[~(data["filename"] == 'filename')].compute()
             type_info = {"channel": "int64",
@@ -136,7 +145,7 @@ class SequenceSummaryHandler(Flounder):
             # older versions of albacore used True | recent versions use TRUE
             data.passes_filtering = data.passes_filtering.isin(
                 ["True", "TRUE"])
-            
+
             for key in type_info.keys():
                 if key in data.columns:
                     data = data.astype({key: type_info.get(key)})
@@ -153,7 +162,7 @@ class SequenceSummaryHandler(Flounder):
                 'passes_filtering', 'barcode_arrangement',
                 ]
         for col in self.seq_sum.columns:
-            if not col in keep:
+            if col not in keep:
                 logging.debug("dropping %s" % col)
                 self.seq_sum = self.seq_sum.drop(col, axis=1)
         pbar = ProgressBar()
@@ -165,6 +174,23 @@ class SequenceSummaryHandler(Flounder):
 
     @functools.lru_cache()
     def import_barcodes_file(self, barcode_file):
+        """
+        Import a barcode file - if demultiplexing not run at basecalling step.
+
+        There is a possibility that base-calling and demultiplexing are
+        performed as discrete processes rather than as a combined process.
+
+        Parameters
+        ----------
+        barcode_file : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        data : TYPE
+            DESCRIPTION.
+
+        """
         logging.info("importing barcode file {}".format(barcode_file))
 
         extension = os.path.splitext(barcode_file)[1].lower()
@@ -179,22 +205,39 @@ class SequenceSummaryHandler(Flounder):
 
         pbar = ProgressBar()
         pbar.register()
-        data = dd.read_csv(barcode_file, delimiter="\t", 
-                           compression=compression, blocksize=blocksize, 
+        data = dd.read_csv(barcode_file, delimiter="\t",
+                           compression=compression, blocksize=blocksize,
                            dtype="object")
-        data = data.iloc[:,[0,1]].compute()
+        data = data.iloc[:, [0, 1]].compute()
         pbar.unregister()
         data = data.set_index('read_id')
         return data
-    
+
     def merge_barcodes_file(self, barcode_file):
+        """
+        Merge a barcode file - if demultiplexing not run at basecalling step.
+
+        There is a possibility that base-calling and demultiplexing are
+        performed as discrete processes rather than as a combined process.
+
+        Parameters
+        ----------
+        barcode_file : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         bc_data = self.import_barcodes_file(barcode_file)
         self.seq_sum = pd.concat([self.seq_sum, bc_data], axis=1, join='inner')
-        
 
     def get_flowcell_id(self):
         """
-        This method pulls the flowcell id from the fastq filename of the 
+        Get the (likely) flowcell_id from the available sequencing information.
+
+        This method pulls the flowcell id from the fastq filename of the
         original sequence ... this code may need to be maintained ...
 
         Returns
@@ -203,7 +246,6 @@ class SequenceSummaryHandler(Flounder):
             DESCRIPTION.
 
         """
-
         columns = list(self.seq_sum_head.columns)
         target = None
         if "filename_fastq" in columns:
@@ -226,7 +268,7 @@ class SequenceSummaryHandler(Flounder):
             fastq_id = fastq_id[2]
         else:
             logging.warning(
-                "ERROR - unable to parse flowcell_id from seq_summary ... "+
+                "ERROR - unable to parse flowcell_id from seq_summary ... " +
                 str(fastq_id))
             fastq_id = "undefined"
         logging.debug("flowcell read as [%s]" % fastq_id)
@@ -234,10 +276,21 @@ class SequenceSummaryHandler(Flounder):
         return fastq_id
 
     def get_read_count(self):
+        """
+        Get the number of reads described within the summary file.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         return len(self.seq_sum.index)
 
     def executive_summary(self, **kwargs):
         """
+        Prepare an executive summary infographic plot.
+
         Method prepares a three panel infographic plot that summarises the
         flowcell, reads and bases sequenced within the associated run
 
@@ -251,7 +304,7 @@ class SequenceSummaryHandler(Flounder):
             ["plot_width", "plot_dpi"], **kwargs)
         read_count = self.get_read_count()
         total_bases = self.seq_sum['sequence_length_template'].sum()
-        
+
         flowcell_node = InfographicNode(legend="flowcell",
                                         value=self.get_flowcell_id(),
                                         graphic='fingerprint')
@@ -268,12 +321,23 @@ class SequenceSummaryHandler(Flounder):
         return ip.plot_infographic(plot_width, plot_dpi)
 
     def get_absolute_runtime(self):
+        """
+        Get the maximum logged runtime from the start_time column.
+
+        Returns
+        -------
+        max_time : TYPE
+            DESCRIPTION.
+
+        """
         max_time = self.seq_sum['start_time'].max()
         return max_time
 
     def get_runtime(self, units="hours", rounded=True):
         """
-        Accessory method to return the length of time that elapsed during 
+        Get the rounded runtime in a more meaningful unit e.g. hours.
+
+        Accessory method to return the length of time that elapsed during
         this flowcell run. If rounded (default) this will be rounded *up*
         to the nearest canonical timing ...
 
@@ -295,7 +359,7 @@ class SequenceSummaryHandler(Flounder):
                  "days": 60 * 60 * 24}
         canonical_runs = [1, 2, 4, 6, 8, 12, 18, 24, 36, 48, 60, 72]
 
-        if not units in scale.keys():
+        if units not in scale.keys():
             raise Exception("{%s} is not a qualified runtime unit ...")
 
         runtime = math.ceil(self.get_absolute_runtime() / scale["hours"])
@@ -311,15 +375,32 @@ class SequenceSummaryHandler(Flounder):
         return (runtime * scale["hours"]) / scale[units]
 
     def plot_passed_gauge(self, **kwargs):
+        """
+        Prepare a gauge-plot summarising fraction of pass/fail reads.
+
+        Not the most amazeballs plot but a quick visual representation of
+        how things appear in terms of pass/fail.
+
+        Parameters
+        ----------
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
-            ["plot_width", "plot_height", "plot_type", "plot_tools"], 
+            ["plot_width", "plot_height", "plot_type", "plot_tools"],
             **kwargs)
-        
+
         read_count = len(self.seq_sum)
         passed_read_count = self.seq_sum.passes_filtering.sum()
         perc_val = passed_read_count / read_count * 100
 
-        p = figure(plot_width=plot_width, plot_height=plot_height, 
+        p = figure(plot_width=plot_width, plot_height=plot_height,
                    x_range=(0.25, 1.75), y_range=(0.7, 1.5), tools=plot_tools)
 
         start_val = 0
@@ -327,18 +408,18 @@ class SequenceSummaryHandler(Flounder):
         end_val = math.pi
 
         p.annular_wedge(
-            x=[1], y=[1], inner_radius=0.2, outer_radius=0.5, 
-            start_angle=middle_val, end_angle=end_val, color="green", 
+            x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
+            start_angle=middle_val, end_angle=end_val, color="green",
             alpha=0.6)
 
         p.annular_wedge(
             x=[1], y=[1], inner_radius=0.2, outer_radius=0.5,
-            start_angle=start_val, end_angle=middle_val, color="orange", 
+            start_angle=start_val, end_angle=middle_val, color="orange",
             alpha=0.6)
 
         label = Label(
-            x=1, y=1, text="{:.1f}%".format(perc_val), x_units='data', 
-            y_units='data', text_align='center', text_font_style='bold', 
+            x=1, y=1, text="{:.1f}%".format(perc_val), x_units='data',
+            y_units='data', text_align='center', text_font_style='bold',
             text_font_size='1.5em')
         legend = Label(x=1, y=0.9,
                        text="Percentage of reads passing QC filter",
@@ -351,11 +432,28 @@ class SequenceSummaryHandler(Flounder):
         p.ygrid.visible = False
         return self.handle_output(p, plot_type, prefix="passed_gauge")
 
-
     def plot_channel_activity(self, **kwargs):
+        """
+        Prepare a channel activity plot for the given flowcell.
+
+        The channel activity plot has been one of the canonical plots for
+        flowcell review - this method will prepare a channel activity plot
+        that is appropriate for MinION, Flongle or PromethION flowcells.
+
+        Parameters
+        ----------
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
-        
+
         channel_map = SequencingSummaryGetChannelMap(self.seq_sum)
         # layout = channel_map.get_platform_map()
         layout = channel_map.get_platform_density()
@@ -368,7 +466,7 @@ class SequenceSummaryHandler(Flounder):
 
         colors = Blues9[::-1]
         mapper = LinearColorMapper(
-            palette=colors, low=layout['count'].min(), 
+            palette=colors, low=layout['count'].min(),
             high=layout['count'].max())
 
         rows = list(layout.row.unique())
@@ -376,8 +474,8 @@ class SequenceSummaryHandler(Flounder):
 
         p = figure(
             title="channel activity plot", x_range=columns, y_range=rows,
-            x_axis_location="above", plot_width=plot_width, 
-            plot_height=plot_height, tools=plot_tools, 
+            x_axis_location="above", plot_width=plot_width,
+            plot_height=plot_height, tools=plot_tools,
             toolbar_location='below')
 
         p.axis.visible = False
@@ -387,7 +485,7 @@ class SequenceSummaryHandler(Flounder):
         p.axis.major_label_text_font_size = "5pt"
         p.axis.major_label_standoff = 0
         p.xaxis.major_label_orientation = math.pi / 3
-        #p.title.text_font_size = '18pt'
+        # p.title.text_font_size = '18pt'
 
         p.rect(x="column", y="row", width=1, height=1,
                source=layout,
@@ -397,27 +495,41 @@ class SequenceSummaryHandler(Flounder):
         color_bar = ColorBar(
             color_mapper=mapper, major_label_text_font_size="10pt",
             ticker=BasicTicker(desired_num_ticks=len(colors)),
-            title="#reads", label_standoff=6, border_line_color=None, 
+            title="#reads", label_standoff=6, border_line_color=None,
             location=(0, 0))
         p.add_layout(color_bar, 'right')
         return self.handle_output(p, plot_type)
 
-
     @functools.lru_cache()
     def get_passed_reads(self, field=None, passed=True):
+        """
+        Return a DataFrame containing information for just the passed reads.
+
+        Parameters
+        ----------
+        field : TYPE, optional
+            DESCRIPTION. The default is None.
+        passed : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         if passed is None:
             return self.seq_sum
         else:
             if field is None:
                 return self.seq_sum.loc[
-                    self.seq_sum['passes_filtering']==passed, ]
+                    self.seq_sum.loc['passes_filtering'] == passed]
             else:
                 return self.seq_sum.loc[
-                    self.seq_sum['passes_filtering']==passed, field]
-
+                    self.seq_sum['passes_filtering'] == passed, field]
 
     @functools.lru_cache()
-    def get_length_character(self, key, field="sequence_length_template", 
+    def get_length_character(self, key, field="sequence_length_template",
                              passed=None):
         """
         This is an accessory method to help get a sequence length threshold
@@ -428,7 +540,7 @@ class SequenceSummaryHandler(Flounder):
         ----------
         key : TYPE
             The feature to report - this can include keywords (max), (mean),
-            (qmean), (N<float>), (n<float>) or (Q<float). 
+            (qmean), (N<float>), (n<float>) or (Q<float).
         field : TYPE, optional
             DESCRIPTION. The default is "sequence_length_template".
         passed : TYPE, optional
@@ -455,7 +567,7 @@ class SequenceSummaryHandler(Flounder):
             series = self.get_passed_reads(field=field, passed=passed)
             return -10 * log10((10 ** (series / -10)).mean())
         # handle N.values
-        elif key[0]=="N":
+        elif key[0] == "N":
             val = float(key[1:])
             ldata = self.get_passed_reads(
                 field=field, passed=passed).sort_values(
@@ -465,25 +577,37 @@ class SequenceSummaryHandler(Flounder):
             accumulated = ldata.cumsum()
             aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
             return ldata[aindex]
-        elif key[0]=="n":
+        elif key[0] == "n":
             val = int(key[1:])
             ldata = self.get_passed_reads(
                 field=field, passed=passed).sort_values(
                     ascending=False).reset_index(drop=True)
             return ldata[val]
-        elif key[0]=="Q":
+        elif key[0] == "Q":
             val = float(key[1:])
             return self.get_passed_reads(
                 field=field, passed=passed).quantile(val)
         logging.error("{} is not an understood transformation")
         return None
 
-
     def library_characteristics_infographic(self, **kwargs):
+        """
+        Prepare an infographic plot summarising the overall library character.
 
+        Parameters
+        ----------
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         (plot_width, plot_dpi) = self.handle_kwargs(
             ["plot_width", "plot_dpi"], **kwargs)
-        
+
         longest_read = self.get_length_character(key="max", passed=True)
         mean_read_length = self.get_length_character(key="mean", passed=True)
         read_n50_length = self.get_length_character(key="N50", passed=True)
@@ -494,7 +618,7 @@ class SequenceSummaryHandler(Flounder):
             key="qmean", passed=False, field="mean_qscore_template")
 
         mean_read_length_node = InfographicNode(
-            legend="Mean Read Length", 
+            legend="Mean Read Length",
             value="{:.2f}".format(mean_read_length),
             graphic='map-signs')
         read_n50_length_node = InfographicNode(
@@ -513,19 +637,32 @@ class SequenceSummaryHandler(Flounder):
             legend="Longest Read",
             value="{:,}".format(longest_read),
             graphic='sort')
-        infographic_data = [mean_read_length_node, 
+        infographic_data = [mean_read_length_node,
                             read_n50_length_node,
-                            passed_mean_q_node, 
+                            passed_mean_q_node,
                             failed_mean_q_node,
                             longest_read_node]
         ip = InfographicPlot(infographic_data, rows=1, columns=5)
         return ip.plot_infographic(plot_width, plot_dpi)
 
-
-
     @functools.lru_cache()
     def extract_size_stratified_data(self, longest_read, bins):
-        
+        """
+        Prepare a DataFrame of sequencing information stratified by length.
+
+        Parameters
+        ----------
+        longest_read : TYPE
+            DESCRIPTION.
+        bins : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
         l_seq_sum = self.seq_sum[[
             "sequence_length_template", "passes_filtering"]]
         
