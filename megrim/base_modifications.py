@@ -237,7 +237,7 @@ class BaseModifications(Flounder):
                 #ref_context = ["".join(fasta[x-5:x+len(self.context)+4])
                 #               for x in mapped_read_chunk.pos.tolist()]
                 
-                ref_context = extract_reference_context(mapped_read_chunk.pos, mapped_read_chunk.rev)
+                ref_context = list(map(extract_reference_context, mapped_read_chunk.pos, mapped_read_chunk.rev))
                 
                 mapped_read_chunk['ref_context'] = ref_context
 
