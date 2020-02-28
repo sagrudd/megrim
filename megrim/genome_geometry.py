@@ -25,6 +25,24 @@ flounder = None
 
 
 def include_flounder(args):
+    """
+    Set the working Flounder environment for methods in this module.
+
+    Flounder provides a collection of tools and environment handles for the
+    caching of results and the orchestration of bokeh figure preparation.
+    Use this module level function to augment the environment for calls
+    outside of a Flounder subclass.
+
+    Parameters
+    ----------
+    args : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
     # setup a Flounder for this workflow ...
     global flounder
     flounder = Flounder()
@@ -35,6 +53,12 @@ def include_flounder(args):
 
 
 class BedHandler:
+    """
+    BedHandler provides a class for quick parsing of BED coordinates.
+
+    The functionality within the class is currently driven by tutorial
+    requirements and everything is likely to change.
+    """
 
     def __init__(self, bedfile):
         self.bedfile = bedfile
@@ -44,6 +68,16 @@ class BedHandler:
         self.load_bed_file()
 
     def load_bed_file(self):
+        """
+        Load the class associated bed file.
+
+        This loads the class associated bed file into memory.
+
+        Returns
+        -------
+        None.
+
+        """
         self.targets = pd.read_csv(self.bedfile, header=None,
                                    names="Chromosome Start End Name".split(),
                                    sep='\t')
@@ -79,7 +113,8 @@ class BedHandler:
         # there may be edge exceptions where End coordinate drops off chromo.
 
         merged = pr.concat([upstream, downstream])
-        return pr.gf.genome_bounds(merged, self.ref.get_reference_ranges(), clip=True)
+        return pr.gf.genome_bounds(
+            merged, self.ref.get_reference_ranges(), clip=True)
 
     def get_untargeted_ranges(self):
         whole_genome_ranges = self.ref.get_reference_ranges()
@@ -90,7 +125,8 @@ class BedHandler:
         # there is a possibility for edge cases where boundaries of
         # target_proximal_ranges extend beyond the limits of the chromosome
         untargeted = whole_genome_ranges.subtract(target_proximal_ranges)
-        return pr.gf.genome_bounds(untargeted, self.ref.get_reference_ranges(), clip=True)
+        return pr.gf.genome_bounds(
+            untargeted, self.ref.get_reference_ranges(), clip=True)
 
 
 class BamHandler(Flounder):
@@ -221,6 +257,26 @@ class BamHandler(Flounder):
 
 
     def plot_coverage_distribution(self, tile_size=1000, bins=30, deepest_bin=None, **kwargs):
+        """
+        Plot a histogram showing frequency of different depths-of-coverage.
+
+        Parameters
+        ----------
+        tile_size : TYPE, optional
+            DESCRIPTION. The default is 1000.
+        bins : TYPE, optional
+            DESCRIPTION. The default is 30.
+        deepest_bin : TYPE, optional
+            DESCRIPTION. The default is None.
+        **kwargs : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
 
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
@@ -276,9 +332,6 @@ class BamHandler(Flounder):
         p.quad(
             source=coverage_dist, top="count", bottom=0, left='start',
             right='end', fill_color='colour', line_color="white", alpha=0.7)
-
-        p.xaxis.axis_label = 'Depth-of-coverage (X-fold)'
-        p.yaxis.axis_label = 'Bases of genome (n)'
 
         return self.handle_output(p, plot_type)
 
@@ -494,6 +547,6 @@ class BamHandler(Flounder):
                      'cigar_i': cigar_i,
                      'cigar_d': cigar_d,
                      'nm': nm}
-        if read_counter > 0: 
+        if read_counter > 0:
             return pd.DataFrame.from_dict(annot)
         return None

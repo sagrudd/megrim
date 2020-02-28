@@ -57,6 +57,19 @@ class Flounder:
         self.thread_processes = multiprocessing.cpu_count()
 
     def sync(self, new_me):
+        """
+        Sync core Flounder parameters to a new instance of Flounder.
+
+        Parameters
+        ----------
+        new_me : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         new_me.set_path(self.get_path())
         new_me.set_results_dir(self.get_results_dir())
         new_me.set_plot_width(self.get_plot_width())
@@ -66,6 +79,19 @@ class Flounder:
         new_me.set_plot_dpi(self.get_plot_dpi())
 
     def argparse(self, args):
+        """
+        Parse provided argparse parameters to configure Flounder env.
+
+        Parameters
+        ----------
+        args : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         self.cache_path = args.cache
         self.args = args
         logging.debug(f"using cache at: {self.cache_path}")
@@ -328,15 +354,27 @@ class Flounder:
         
 
 def get_megrim_version():
+    """
+    Return the annotated version of this Megrim module instance.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    """
     try:
         distribution = get_distribution("megrim")
         print()
         return distribution.version
     except:
         logging.warning("megrim package may not be installed")
-        txt_chunk = open((pathlib.Path(resource_filename('megrim', 'data')).parent.parent / "setup.py").as_posix()).read()
+        txt_chunk = open(
+            (pathlib.Path(resource_filename('megrim', 'data')).
+             parent.parent / "setup.py").as_posix()).read()
         txt_lines = txt_chunk.splitlines()
-        version = re.findall('(?<=version=\')[^\']+', list(filter(lambda x: 'version=' in x, txt_lines))[0])[0]
+        version = re.findall('(?<=version=\')[^\']+', list(
+            filter(lambda x: 'version=' in x, txt_lines))[0])[0]
         return version
 
 
