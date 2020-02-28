@@ -231,8 +231,10 @@ class BaseModifications(Flounder):
                 # should we also consider reference context since there are
                 # a lot of base assignments where read context != reference
                 # context, even with depth-of-coverage?
-                def extract_reference_context(
-                        position, reverse, offset=0, rev_comp=True):
+                offset = 0
+                rev_comp = True
+
+                def extract_reference_context(position, reverse):
                     start = int(position)
                     end = int(position)+len(self.context)
                     if reverse == 1:
@@ -267,9 +269,11 @@ class BaseModifications(Flounder):
                     mapped_read_chunk['ref_context'] == self.context]
 
                 # and expand the reference context string just a little
+                offset = 5
+                rev_comp = False
                 mapped_read_chunk['ref_context'] = list(
                     map(extract_reference_context, mapped_read_chunk.pos,
-                        mapped_read_chunk.rev, 5, False))
+                        mapped_read_chunk.rev))
 
                 chr_mapped_reads.append(mapped_read_chunk)
                 logging.debug(mapped_read_chunk)
