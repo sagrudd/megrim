@@ -16,6 +16,7 @@ dependencies:
   - spyder
   - nb_conda_kernels
   - bokeh
+  - ghostscript
   - pip
   - pip:
     - "--editable=git+https://github.com/sagrudd/megrim.git#egg=megrim"
