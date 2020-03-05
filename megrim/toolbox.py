@@ -18,6 +18,7 @@ from importlib import reload
 import logging
 import tempfile
 import multiprocessing
+import warnings
 
 
 class MegrimToolBox:
@@ -151,6 +152,7 @@ def main():
     None.
 
     """
+    warnings.simplefilter(action='ignore', category=FutureWarning)
     reload(logging)
     logging.basicConfig(
         format='%(asctime)s %(levelname)s:%(message)s',
