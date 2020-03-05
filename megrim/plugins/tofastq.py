@@ -14,6 +14,7 @@ from mimetypes import guess_type
 from functools import partial
 import os
 import sys
+import warnings
 
 
 FASTQ = "FASTQ"
@@ -225,6 +226,7 @@ class ToFastq(MegrimPlugin):
         Nothing at all - stuff may be presented to screen.
 
         """
+        warnings.simplefilter(action='ignore', category=FutureWarning)
         self.args = args
 
         file_format = self.guess_format()
