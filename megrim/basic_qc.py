@@ -645,6 +645,33 @@ class SequenceSummaryHandler(Flounder):
         ip = InfographicPlot(infographic_data, rows=1, columns=5)
         return ip.plot_infographic(plot_width, plot_dpi)
 
+
+    def calculate_n_val(self, data, n=50):
+        """
+        Method to report N values.
+
+        Parameters
+        ----------
+        data : TYPE
+            DESCRIPTION.
+        n : TYPE, optional
+            DESCRIPTION. The default is 50.
+
+        Returns
+        -------
+        N : TYPE
+            DESCRIPTION.
+
+        """
+        ldata = data.sort_values(ascending=False).reset_index(drop=True)
+        n_sum = int(ldata.sum())
+        n_targ = n_sum * (n / 100)
+        accumulated = ldata.cumsum()
+        aindex = accumulated.loc[(accumulated >= n_targ)].index[0]
+        N = ldata[aindex]
+        return N
+        
+
     @functools.lru_cache()
     def extract_size_stratified_data(self, longest_read, bins):
         """
