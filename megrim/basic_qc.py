@@ -199,7 +199,8 @@ class SequenceSummaryHandler(Flounder):
                     # TODO: there is still a load of stuff that could be parsed from a Guppy derived Fastq?
                     read = pd.Series({'read_id': record.id,
                                       'sequence_length_template': len(record),
-                                      'mean_qscore_template':  get_read_mean_quality(record)})
+                                      'mean_qscore_template':  get_read_mean_quality(record),
+                                      'passes_filtering': True})
                     result.append(read)
                     count += 1
                     # print(f"{count} {record.id}")
@@ -208,7 +209,7 @@ class SequenceSummaryHandler(Flounder):
             except ValueError:
                 pass
 
-        self.seq_sum = pd.concat(result, sort=False)
+        self.seq_sum = pd.DataFrame(result)
         self.seq_sum_head = self.seq_sum.head()
 
     @functools.lru_cache()
