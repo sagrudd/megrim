@@ -26,13 +26,16 @@ class VirusGenome(Flounder):
 
     # todo: please merge this class into the ReferenceGenome class.
 
-    def __init__(self, ref, bam, fasta=None):
+    def __init__(self, ref, bam, bam_b=None, fasta=None):
         Flounder.__init__(self)
         self.ref = ReferenceGenome(ref)
         self.bam = BamHandler(bam)
+        self.bam_b = None
+        if bam_b is not None:
+            self.bam_b = BamHandler(bam_b)
         self.fasta = fasta
 
-    def get_coverage(self, tile_size=10):
+    def get_coverage(self, plot_bam_b=False, tile_size=10):
         """
         Get the mean depth-of-coverage across the specified genome.
 
@@ -45,6 +48,9 @@ class VirusGenome(Flounder):
 
         Parameters
         ----------
+        plot_bam_b: boolean
+            This specifies whether a supplementary RG bam should be plotted instead.
+            The default is False (standard bam).
         tile_size: int
             The size of the window to use when tiling the genome.
             The default is 10.
@@ -56,6 +62,9 @@ class VirusGenome(Flounder):
             boundaries and mean depths-of-coverage.
 
         """
+        if plot_bam_b and self.bam_b is not None:
+            return self.ref.get_tiled_mean_coverage(
+                self.bam_b, tile_size=tile_size)
         return self.ref.get_tiled_mean_coverage(
             self.bam, tile_size=tile_size)
 
@@ -91,19 +100,26 @@ class VirusGenome(Flounder):
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
         coverage = self.get_coverage(tile_size=tile_size)
+        coverage_b = None
+        if self.bam_b is not None:
+            coverage_b = self.get_coverage(plot_bam_b=True, tile_size=tile_size)
 
         plot = figure(
-            title="Plot showing depth of coverage across ({}) genome".
-            format(id),
+            title=f"Plot showing depth of coverage across ({id}) genome",
             x_axis_label="Position on Chr({})".
             format(str(coverage.Chromosome.tolist()[0])),
             y_axis_label='Depth of coverage (X)',
             background_fill_color="lightgrey",
             plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
-        plot.line(coverage.Start, coverage.MeanCoverage,
-                  line_width=2, line_color='#1F78B4',
-                  legend_label='Depth of Coverage')
+        if coverage_b is not None:
+            plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#1F78B4',
+                      legend_label='Depth-of-Coverage (RG1)')
+            plot.line(coverage_b.Start, coverage_b.MeanCoverage, line_width=2, line_color='#1fb4a5',
+                      legend_label='Depth-of-Coverage (RG2)')
+        else:
+            plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#1F78B4',
+                      legend_label='Depth-of-Coverage')
 
         plot.xaxis.formatter = NumeralTickFormatter(format="0,0")
         return self.handle_output(plot, plot_type)
