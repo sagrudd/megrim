@@ -177,13 +177,13 @@ class SequenceSummaryHandler(Flounder):
             self.seq_sum = self.seq_sum.set_index('read_id')
         pbar.unregister()
 
-    def assess_fastq(self, fastq_src):
+    def assess_fastq(self, fastq_src, limit=-1):
 
         def get_read_mean_quality(xrecord):
             return -10 * log10((10 ** (pd.Series(xrecord.letter_annotations["phred_quality"]) / -10)).mean())
 
         result = []
-
+        count = 0
         encoding = guess_type(fastq_src)[1]
         # print(f"file encoding checked == {encoding}")
         _open = open
@@ -199,8 +199,11 @@ class SequenceSummaryHandler(Flounder):
                     # TODO: there is still a load of stuff that could be parsed from a Guppy derived Fastq?
                     read = pd.Series({'read_id': record.id,
                                       'sequence_length_template': len(record),
-                                      'mean_qscore_template':  get_read_mean_quality(record) })
+                                      'mean_qscore_template':  get_read_mean_quality(record)})
                     result.append(read)
+                    count += 1
+                    if (limit > 0) and (count >= limit):
+                        break
             except ValueError:
                 pass
 
