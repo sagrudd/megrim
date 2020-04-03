@@ -27,6 +27,11 @@ from bokeh.models import LinearColorMapper, BasicTicker, ColorBar, Label, \
 from bokeh.palettes import (Blues9)
 from bokeh.plotting import figure
 import functools
+from mimetypes import guess_type
+from functools import partial
+import gzip
+import bz2
+from Bio import SeqIO
 
 # import palettable.colorbrewer.sequential
 
@@ -105,7 +110,7 @@ class SequenceSummaryHandler(Flounder):
         the reduced contents into memory - a DASK dataframe is used to
         allow for the scaling to large PromethION runs (or equivalent)
 
-        There is a possibility of duplicate header lines; these will btreak
+        There is a possibility of duplicate header lines; these will break
         the dask import
 
         grep can be used to identify the line numbers - this can take a while
@@ -171,6 +176,36 @@ class SequenceSummaryHandler(Flounder):
             self.seq_sum = self.seq_sum.compute()
             self.seq_sum = self.seq_sum.set_index('read_id')
         pbar.unregister()
+
+    def assess_fastq(self, fastq_src):
+
+        def get_read_mean_quality(xrecord):
+            return -10 * log10((10 ** (pd.Series(xrecord.letter_annotations["phred_quality"]) / -10)).mean())
+
+        result = []
+
+        encoding = guess_type(fastq_src)[1]
+        # print(f"file encoding checked == {encoding}")
+        _open = open
+        if encoding == "gzip":
+            _open = partial(gzip.open, mode="rt")
+        if encoding == "bzip2":
+            _open = partial(bz2.open, mode="rt")
+        with _open(fastq_src) as f:
+
+            try:
+                for record in SeqIO.parse(f, "fastq"):
+
+                    # TODO: there is still a load of stuff that could be parsed from a Guppy derived Fastq?
+                    read = pd.Series({'read_id': record.id,
+                                      'sequence_length_template': len(record),
+                                      'mean_qscore_template':  get_read_mean_quality(record) })
+                    result.append(read)
+            except ValueError:
+                pass
+
+        self.seq_sum = pd.concat(result, sort=False)
+        self.seq_sum_head = self.seq_sum.head()
 
     @functools.lru_cache()
     def import_barcodes_file(self, barcode_file):
