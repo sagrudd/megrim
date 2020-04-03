@@ -115,7 +115,7 @@ class VirusGenome(Flounder):
         if coverage_b is not None:
             plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#1F78B4',
                       legend_label='Depth-of-Coverage (RG1)')
-            plot.line(coverage_b.Start, coverage_b.MeanCoverage, line_width=2, line_color='#1fb4a5',
+            plot.line(coverage_b.Start, coverage_b.MeanCoverage, line_width=2, line_color='#A6CEE3',
                       legend_label='Depth-of-Coverage (RG2)')
         else:
             plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#1F78B4',
@@ -158,7 +158,14 @@ class VirusGenome(Flounder):
         """
         (plot_width, plot_height, plot_type, plot_tools) = self.handle_kwargs(
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
+
         coverage = self.get_coverage(tile_size=tile_size)
+        if self.bam_b is not None:
+            coverage = pd.merge(self.get_coverage(tile_size=tile_size).df,
+                                self.get_coverage(tile_size=tile_size, plot_bam_b=True).df,
+                                on=["Chromosome", "Start", "End"])
+            coverage['MeanCoverage'] = coverage[["MeanCoverage_x", "MeanCoverage_y"]].sum(axis=1)
+
         mc = coverage.MeanCoverage
         deepest_bin = mc.max()+1
         boundaries = np.linspace(
@@ -235,6 +242,12 @@ class VirusGenome(Flounder):
             ["plot_width", "plot_height", "plot_type", "plot_tools"], **kwargs)
 
         coverage = self.get_coverage(tile_size=tile_size)
+        if self.bam_b is not None:
+            coverage = pd.merge(self.get_coverage(tile_size=tile_size).df,
+                                self.get_coverage(tile_size=tile_size, plot_bam_b=True).df,
+                                on=["Chromosome", "Start", "End"])
+            coverage['MeanCoverage'] = coverage[["MeanCoverage_x", "MeanCoverage_y"]].sum(axis=1)
+            
         if max_depth is None:
             max_depth = coverage.MeanCoverage.max() + 1
             print("max_depth set to {}".format(max_depth))
