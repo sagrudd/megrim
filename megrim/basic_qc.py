@@ -202,7 +202,7 @@ class SequenceSummaryHandler(Flounder):
                                       'mean_qscore_template':  get_read_mean_quality(record)})
                     result.append(read)
                     count += 1
-                    print(f"{count} {record.id}")
+                    # print(f"{count} {record.id}")
                     if (limit > 0) and (count >= limit):
                         break
             except ValueError:
