@@ -12,6 +12,7 @@ from megrim.genome_geometry import BamHandler
 from bokeh.plotting import figure
 import numpy as np
 import pandas as pd
+import pyranges as pr
 from bokeh.models import NumeralTickFormatter, Label
 
 
@@ -247,7 +248,9 @@ class VirusGenome(Flounder):
                                 self.get_coverage(tile_size=tile_size, plot_bam_b=True).df,
                                 on=["Chromosome", "Start", "End"])
             coverage['MeanCoverage'] = coverage[["MeanCoverage_x", "MeanCoverage_y"]].sum(axis=1)
-            
+            # and convert back to pyranges ...
+            coverage = pr.PyRanges(coverage)
+
         if max_depth is None:
             max_depth = coverage.MeanCoverage.max() + 1
             print("max_depth set to {}".format(max_depth))
