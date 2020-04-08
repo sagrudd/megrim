@@ -114,9 +114,9 @@ class VirusGenome(Flounder):
             plot_width=plot_width, plot_height=plot_height, tools=plot_tools)
 
         if coverage_b is not None:
-            plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#1F78B4',
+            plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#E69F00',
                       legend_label='Depth-of-Coverage (RG1)')
-            plot.line(coverage_b.Start, coverage_b.MeanCoverage, line_width=2, line_color='#A6CEE3',
+            plot.line(coverage_b.Start, coverage_b.MeanCoverage, line_width=2, line_color='#56B4E9',
                       legend_label='Depth-of-Coverage (RG2)')
         else:
             plot.line(coverage.Start, coverage.MeanCoverage, line_width=2, line_color='#1F78B4',
