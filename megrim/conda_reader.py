@@ -139,7 +139,7 @@ class RpmHandler(Flounder):
         # download the source file
         url = self.conda.conda_yaml["source"]["url"]
         a = urlparse(url)
-        downto = os.path.join(self.args.rpm, "SPECS", os.path.basename(a.path))
+        downto = os.path.join(self.args.rpm, "SOURCES", os.path.basename(a.path))
         logging.info(f"downloading")
 
         ctx = ssl.create_default_context()
