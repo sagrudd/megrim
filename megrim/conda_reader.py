@@ -186,15 +186,17 @@ class RpmHandler(Flounder):
             line = line.strip()
             line = self.parseprefix(line)
             print(line)
-            if re.search("^cp", line) and re.search('(%{_bindir}|%{_libdir})', line):
+            if re.search("^mkdir", line) and re.search('%{_exec_prefix}', line):
+                print(re.sub("%{_exec_prefix}", "%{buildroot}/%{_exec_prefix}", line), file=fh)
+            if re.search("^cp", line) and re.search('%{_exec_prefix}/bin', line):
                 line = re.sub("^cp", "%{__install} -m 0755", line)
-                line = re.sub("%{_bindir}", "%{buildroot}/%{_bindir}", line)
+                line = re.sub("%{_exec_prefix}", "%{buildroot}/%{_exec_prefix}", line)
                 print(line, file=fh)
 
     def parseprefix(self, line):
-        line = re.sub("\\$PREFIX/bin", "%{_bindir}", line)
-        line = re.sub("\\$PREFIX/lib", "%{_libdir}", line)
-        line = re.sub("\\$PREFIX/include", "%{_includedir}", line)
+        line = re.sub("\\$PREFIX/bin", "%{_exec_prefix}/bin", line)
+        line = re.sub("\\$PREFIX/lib", "%{_exec_prefix}/lib", line)
+        line = re.sub("\\$PREFIX/include", "%{_prefix}/include", line)
         return line
 
     def download_source(self):
