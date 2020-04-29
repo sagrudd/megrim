@@ -142,8 +142,9 @@ class RpmHandler(Flounder):
 
             print("\n%setup", file=file)
 
-            print("\n%configure", file=file)
-            self.extract_configuration_cmds(file)
+            # we need some configure handling to be added here?
+            # print("\n%configure", file=file)
+            # self.extract_configuration_cmds(file)
 
             print("\n%build", file=file)
             self.extract_build_cmds(file)
@@ -164,27 +165,28 @@ class RpmHandler(Flounder):
         build_lines = self.conda.get_build_lines()
         for line in build_lines:
             line = line.strip()
+            line = self.parseprefix(line)
             # print(line)
-            if re.search("^curl", line):
-                line = self.parseprefix(line)
-                print(line, file=fh)
+
 
     def extract_build_cmds(self, fh):
         build_lines = self.conda.get_build_lines()
         for line in build_lines:
             line = line.strip()
+            line = self.parseprefix(line)
             # print(line)
             if re.search("^make", line) and not re.search("^make install", line):
-                line = self.parseprefix(line)
+                print(line, file=fh)
+            if re.search("^curl", line):
                 print(line, file=fh)
 
     def extract_install_cmds(self, fh):
         build_lines = self.conda.get_build_lines()
         for line in build_lines:
             line = line.strip()
+            line = self.parseprefix(line)
             print(line)
             if re.search("^cp", line) and re.search('\\$PREFIX', line):
-                line = self.parseprefix(line)
                 print(line, file=fh)
 
     def parseprefix(self, line):
