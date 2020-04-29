@@ -39,3 +39,6 @@ class Conda2Rpm(MegrimPlugin):
         argparser.add_argument(
             '-r', '--rpm', metavar="RPM directory", action='store',
             dest="rpm", required=True, help='The root folder of the target RPM directory')
+        argparser.add_argument(
+            '-f', '--force', action='store_true', help='force building of RPM even if preexisting',
+            required=False, dest="force", default=False)

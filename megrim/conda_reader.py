@@ -7,6 +7,7 @@ import re
 import urllib.request
 import ssl
 from urllib.parse import urlparse
+import sys
 
 
 class CondaGit(Flounder):
@@ -94,15 +95,30 @@ class RpmHandler(Flounder):
 
         package_name = self.conda.conda_yaml["package"]["name"]
         package_version = self.conda.conda_yaml["package"]["version"]
+        package_release = self.conda.conda_yaml["build"]["number"]
         spec_id = f"{package_name}-{package_version}.spec"
         spec = os.path.join(self.args.rpm, "SPECS", spec_id)
+
+        if os.path.exists(spec):
+            logging.info(f"RPM manifest [{spec_id}] already exists")
+            logging.info(f"             release version at [{package_release}]")
+            if not self.args.force:
+                logging.info("Skipping this file ...")
+                return
+            else:
+                logging.info("incrementing release version for RPM updates")
+                spec_pars = SpecParser(spec)
+                existing_release = spec_pars.get_spec_release()
+                if int(existing_release) >= int(package_release):
+                    package_release = int(existing_release) + 1
+                logging.info(f"RPM SPEC being updated with release version [{package_release}]")
 
         logging.info(f"preparing RPM manifest [{spec}]")
         with open(spec, "w") as file:
             print("%define debug_package %{nil}", file=file)
             print("\nName: "+package_name, file=file)
             print("Version: "+package_version, file=file)
-            print("Release: "+self.conda.conda_yaml["build"]["number"]+"%{?dist}", file=file)
+            print("Release: "+str(package_release)+"%{?dist}", file=file)
             print("Summary: "+self.conda.conda_yaml["about"]["summary"], file=file)
             print("Group: Applications / Bioinformatics", file=file)
             print("License: "+self.conda.conda_yaml["about"]["license"], file=file)
@@ -230,6 +246,32 @@ class RpmHandler(Flounder):
 
 
 
+
+
 conda2rpm_mapping = {"{{ compiler('cxx') }}": "gcc",
                      "{{ compiler('c') }}": "gcc",
                      "zlib": "zlib-devel", }
+
+
+class SpecParser(Flounder):
+
+    def __init__(self, spec):
+        Flounder.__init__(self)
+        self.spec = spec
+        self.lines = None
+
+    def get_spec_release(self):
+        if self.lines is None:
+            self.load_lines()
+        version = None
+        for line in self.lines:
+            if re.search("^Release:", line):
+                return re.search("(?<=Release: )[^%]+", line).group(0)
+        return 1
+
+    def load_lines(self):
+        logging.info(f"reading SPEC file {self.spec}")
+        with open(self.spec) as file:
+            self.lines = file.readlines()
+
+
