@@ -46,6 +46,13 @@ class CondaGit(Flounder):
         self.conda_yaml = yaml.load(text, Loader=yaml.BaseLoader)
         logging.info(self.conda_yaml)
 
+    def get_build_lines(self):
+        build = os.path.join(self.args.bioconda, "recipes", self.args.target, "build.sh")
+        logging.info(f"looking for {build}")
+        with open(build) as file:
+            build_lines = file.readlines()
+        return build_lines
+
 
 def extract_set_value(line):
     line = re.sub("({% set|%}|\")", "", line.strip()).strip().split("=")
@@ -132,11 +139,62 @@ class RpmHandler(Flounder):
             print("%define _datarootdir /", file=file)
 
             print("\n%prep", file=file)
-            print("\n%setup", file=file)
-            print("\n%build", file=file)
-            print("\n%install", file=file)
 
-        # download the source file
+            print("\n%setup", file=file)
+
+            print("\n%configure", file=file)
+            self.extract_configuration_cmds(file)
+
+            print("\n%build", file=file)
+            self.extract_build_cmds(file)
+
+            print("\n%install", file=file)
+            self.extract_install_cmds(file)
+
+            print("\n%files", file=file)
+
+            print("\n%clean", file=file)
+
+            print("\n%changelog", file=file)
+
+
+        self.download_source()
+
+    def extract_configuration_cmds(self, fh):
+        build_lines = self.conda.get_build_lines()
+        for line in build_lines:
+            line = line.strip()
+            # print(line)
+            if re.search("^curl", line):
+                line = self.parseprefix(line)
+                print(line, file=fh)
+
+    def extract_build_cmds(self, fh):
+        build_lines = self.conda.get_build_lines()
+        for line in build_lines:
+            line = line.strip()
+            # print(line)
+            if re.search("^make", line) and not re.search("^make install", line):
+                line = self.parseprefix(line)
+                print(line, file=fh)
+
+    def extract_install_cmds(self, fh):
+        build_lines = self.conda.get_build_lines()
+        for line in build_lines:
+            line = line.strip()
+            print(line)
+            if re.search("^cp", line) and re.search('\\$PREFIX', line):
+                line = self.parseprefix(line)
+                print(line, file=fh)
+
+    def parseprefix(self, line):
+        line = re.sub("\\$PREFIX/bin", "%{_bindir}", line)
+        line = re.sub("\\$PREFIX/lib", "%{_libdir}", line)
+        line = re.sub("\\$PREFIX/include", "%{_includedir}", line)
+        return line
+
+    def download_source(self):
+        # download the source file [[ count be moved to a function]]
         url = self.conda.conda_yaml["source"]["url"]
         a = urlparse(url)
         downto = os.path.join(self.args.rpm, "SOURCES", os.path.basename(a.path))
