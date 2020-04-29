@@ -52,7 +52,22 @@ class CondaGit(Flounder):
         logging.info(f"looking for {build}")
         with open(build) as file:
             build_lines = file.readlines()
-        return build_lines
+
+        processed_lines = []
+        # we should collapse the multi-line \ entries
+
+        entry = ""
+        for line in build_lines:
+            line = line[:-1]
+            if line.endswith("\\"):
+                entry += line[:-1].strip() + " "
+            elif len(entry) > 0:
+                processed_lines.append(entry)
+                entry = ""
+            else:
+                processed_lines.append(line)
+
+        return processed_lines
 
 
 def extract_set_value(line):
@@ -82,6 +97,7 @@ class RpmHandler(Flounder):
                 self.dictparse(args)
         self.conda = conda
         self.has_bin = False
+        self.defined_vals = {"{CPU_COUNT}": "4", "SRC_DIR": "%{buildroot}"}
 
     def prepare_manifest(self):
 
@@ -161,7 +177,7 @@ class RpmHandler(Flounder):
 
             # we need some configure handling to be added here?
             # print("\n%configure", file=file)
-            # self.extract_configuration_cmds(file)
+            self.extract_configuration_cmds(file)
 
             print("\n%build", file=file)
             self.extract_build_cmds(file)
@@ -181,11 +197,18 @@ class RpmHandler(Flounder):
         self.download_source()
 
     def extract_configuration_cmds(self, fh):
+        #print("=====")
         build_lines = self.conda.get_build_lines()
         for line in build_lines:
             line = line.strip()
             line = self.parseprefix(line)
-            # print(line)
+            if re.search("^[^\\s]+=", line):
+                key, value = line.split("=", maxsplit=1)
+                if key in self.defined_vals.keys() and re.search("\\$"+key, value):
+                    value = re.sub("(\\$"+key+"|\"\")", "", self.defined_vals[key] + value)
+
+                self.defined_vals[key] = value
+                logging.info(f"internal value [{key}] --> [{value}]")
 
 
     def extract_build_cmds(self, fh):
@@ -193,17 +216,32 @@ class RpmHandler(Flounder):
         for line in build_lines:
             line = line.strip()
             line = self.parseprefix(line)
+
+            for key in self.defined_vals.keys():
+                if re.search("\\$"+key, line):
+                    line = re.sub("\\$"+key, self.defined_vals[key], line)
+
             # print(line)
+            if re.search("^./configure", line):
+                print(line, file=fh)
             if re.search("^make", line) and not re.search("^make install", line):
                 print(line, file=fh)
             if re.search("^curl", line):
                 print(line, file=fh)
+
+
+
 
     def extract_install_cmds(self, fh):
         build_lines = self.conda.get_build_lines()
         for line in build_lines:
             line = line.strip()
             line = self.parseprefix(line)
+
+            for key in self.defined_vals.keys():
+                if re.search("\\$"+key, line):
+                    line = re.sub("\\$"+key, self.defined_vals[key], line)
+
             print(line)
             if re.search("^mkdir", line) and re.search('%{_exec_prefix}', line):
                 print(re.sub("%{_exec_prefix}", "%{buildroot}/%{_exec_prefix}", line), file=fh)
@@ -217,6 +255,7 @@ class RpmHandler(Flounder):
         line = re.sub("\\$PREFIX/bin", "%{_exec_prefix}/bin", line)
         line = re.sub("\\$PREFIX/lib", "%{_exec_prefix}/lib", line)
         line = re.sub("\\$PREFIX/include", "%{_prefix}/include", line)
+        line = re.sub("\\$PREFIX", "%{_prefix}", line)
         return line
 
     def dump_file_content(self, fh):
