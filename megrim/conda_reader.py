@@ -186,7 +186,9 @@ class RpmHandler(Flounder):
             line = line.strip()
             line = self.parseprefix(line)
             print(line)
-            if re.search("^cp", line) and re.search('\\$PREFIX', line):
+            if re.search("^cp", line) and re.search('(%{_bindir}|%{_libdir})', line):
+                line = re.sub("^cp", "%{__install} -m 0755", line)
+                line = re.sub("%{_bindir}", "%{buildroot}/%{_bindir}", line)
                 print(line, file=fh)
 
     def parseprefix(self, line):
@@ -200,15 +202,17 @@ class RpmHandler(Flounder):
         url = self.conda.conda_yaml["source"]["url"]
         a = urlparse(url)
         downto = os.path.join(self.args.rpm, "SOURCES", os.path.basename(a.path))
-        logging.info(f"downloading")
 
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        with urllib.request.urlopen(url, context=ctx) as u, open(downto, "wb") as file:
-            file.write(u.read())
+        if not os.path.exists(downto):
+            logging.info(f"downloading")
 
-        logging.info(f"downloaded to [{downto}]")
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(url, context=ctx) as u, open(downto, "wb") as file:
+                file.write(u.read())
+
+            logging.info(f"downloaded to [{downto}]")
 
 
 
