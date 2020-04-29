@@ -52,3 +52,5 @@ megrim/Tutorials/basic_qc/basic_qc_tutorial.html
 .ipynb_checkpoints/
 
 src/
+
+megrim/plugins/__pycache__/

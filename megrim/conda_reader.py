@@ -80,6 +80,7 @@ class RpmHandler(Flounder):
             if isinstance(args, dict):
                 self.dictparse(args)
         self.conda = conda
+        self.has_bin = False
 
     def prepare_manifest(self):
 
@@ -153,8 +154,10 @@ class RpmHandler(Flounder):
             self.extract_install_cmds(file)
 
             print("\n%files", file=file)
+            self.dump_file_content(file)
 
             print("\n%clean", file=file)
+            self.cleanup(file)
 
             print("\n%changelog", file=file)
 
@@ -189,6 +192,7 @@ class RpmHandler(Flounder):
             if re.search("^mkdir", line) and re.search('%{_exec_prefix}', line):
                 print(re.sub("%{_exec_prefix}", "%{buildroot}/%{_exec_prefix}", line), file=fh)
             if re.search("^cp", line) and re.search('%{_exec_prefix}/bin', line):
+                self.has_bin = True
                 line = re.sub("^cp", "%{__install} -m 0755", line)
                 line = re.sub("%{_exec_prefix}", "%{buildroot}/%{_exec_prefix}", line)
                 print(line, file=fh)
@@ -198,6 +202,14 @@ class RpmHandler(Flounder):
         line = re.sub("\\$PREFIX/lib", "%{_exec_prefix}/lib", line)
         line = re.sub("\\$PREFIX/include", "%{_prefix}/include", line)
         return line
+
+    def dump_file_content(self, fh):
+        if self.has_bin:
+            print("%{_exec_prefix}/bin/*", file=fh)
+
+    def cleanup(self, fh):
+        print("rm -fR %{_builddir}/%{name}-%{version}", file=fh)
+        print("rm -fR %{buildroot}", file=fh)
 
     def download_source(self):
         # download the source file [[ count be moved to a function]]
