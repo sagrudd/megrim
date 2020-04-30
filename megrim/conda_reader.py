@@ -65,8 +65,16 @@ class CondaGit(Flounder):
         # we should collapse the multi-line \ entries
 
         entry = ""
+        is_perl = False
+
         for line in build_lines:
             line = line[:-1]
+
+            # handle generic PERL ....
+            if line.startswith("if [ -f Build.PL ]; then"):
+                processed_lines.append("%{PERL_BUILD}")
+
+            # handle multi-line entries ...
             if line.endswith("\\"):
                 entry += line[:-1].strip() + " "
             elif len(entry) > 0:
@@ -108,7 +116,19 @@ class RpmHandler(Flounder):
         self.defined_vals = {"{CPU_COUNT}": "4", "SRC_DIR": "%{buildroot}"}
         self.build_requires = []
         self.run_requires = ["environment-modules"]
+        self.index = []
+        self.load_index()
         self.check_dependencies()
+
+    def load_index(self):
+        with open("index.html") as file:
+            build_lines = file.readlines()
+        i = 0
+        for line in build_lines:
+            if re.search("<td class=\"indexcolicon\">", line):
+                i += 1
+                line = re.search("(?<=a href=\")[^\"]+", line).group(0)
+                self.index.append(line)
 
     def prepare_manifest(self):
 
@@ -199,24 +219,36 @@ class RpmHandler(Flounder):
                 if build not in self.build_requires:
                     self.build_requires.append(build)
 
-        for build in self.conda.conda_yaml["requirements"]["host"]:
-            if build in conda2rpm_mapping.keys():
-                build = conda2rpm_mapping[build]
-            else:
-                self.sanity_check_package(build)
-            if build not in self.build_requires:
-                self.build_requires.append(build)
+        if "host" in self.conda.conda_yaml["requirements"]:
+            for build in self.conda.conda_yaml["requirements"]["host"]:
+                if build in conda2rpm_mapping.keys():
+                    build = conda2rpm_mapping[build]
+                else:
+                    self.sanity_check_package(build)
+                if build not in self.build_requires:
+                    self.build_requires.append(build)
 
-        for build in self.conda.conda_yaml["requirements"]["run"]:
-            if build in conda2rpm_mapping.keys():
-                build = conda2rpm_mapping[build]
-            else:
-                self.sanity_check_package(build)
-            if build not in self.run_requires:
-                self.run_requires.append(build)
+        if "run" in self.conda.conda_yaml["requirements"]:
+            for build in self.conda.conda_yaml["requirements"]["run"]:
+                if build in conda2rpm_mapping.keys():
+                    build = conda2rpm_mapping[build]
+                else:
+                    self.sanity_check_package(build)
+                if build not in self.run_requires:
+                    self.run_requires.append(build)
 
     def sanity_check_package(self, package):
         logging.info(f"dependency package [{package}] is not a default package")
+
+        candidate_found=False
+        for idx in self.index:
+            if re.search(package, idx.lower()):
+                logging.info(f"candidate package == [{idx}]")
+                pkg = self.conda.conda_yaml["package"]["name"]
+                logging.info(f"                     \"{package}\": \"{idx}\", ")
+                candidate_found = True
+        if candidate_found:
+            sys.exit(0)
 
         newargs = copy.copy(self.args)
         newargs.target = package
@@ -325,7 +357,28 @@ conda2rpm_mapping = {"{{ compiler('cxx') }}": "gcc",
                      "perl": "perl",
                      "gcc": "gcc",
                      "bzip2": "bzip2-devel",
-                     "pcre": "pcre",}
+                     "pcre": "pcre",
+                     "perl-html-parser": "perl-HTML-Parser",
+                     "perl-html-tagset": "perl-HTML-Tagset",
+                     "perl-carp": "perl-Carp",
+                     "perl-exporter": "perl-Exporter",
+                     "perl-module-build": "perl-Module-Build",
+                     "perl-html-tree": "perl-HTML-Tree",
+                     "perl-http-cookies": "perl-HTTP-Cookies",
+                     "perl-http-date": "perl-HTTP-Date",
+                     "perl-http-message": "perl-HTTP-Message",
+                     "perl-http-negotiate": "perl-HTTP-Negotiate",
+                     "perl-io-socket-ssl": "perl-IO-Socket-SSL",
+                     "perl-lwp-mediatypes": "perl-LWP-MediaTypes",
+                     "perl-lwp-protocol-https": "perl-LWP-Protocol-https",
+                     "perl-net-http": "perl-Net-HTTP",
+                     "perl-uri": "perl-URI",
+                     "perl-www-robotrules": "perl-WWW-RobotRules",
+                     "perl-mozilla-ca": "perl-Mozilla-CA",
+                     "perl-xml-simple": "perl-XML-Simple",
+
+
+                     }
 
 
 class SpecParser(Flounder):
