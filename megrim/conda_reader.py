@@ -8,6 +8,7 @@ import urllib.request
 import ssl
 from urllib.parse import urlparse
 import sys
+import copy
 
 
 class CondaGit(Flounder):
@@ -24,7 +25,9 @@ class CondaGit(Flounder):
         self.conda_yaml = None
 
     def lookup(self):
-        self.extract_conda_manifest()
+        if self.extract_conda_manifest():
+            return True
+        return False
 
     def extract_conda_manifest(self):
         logging.info(f"looking up conda entity [{self.args.target}] from [{self.args.bioconda}] ...")
@@ -32,6 +35,10 @@ class CondaGit(Flounder):
         # read the YAML file ...
         src = os.path.join(self.args.bioconda, "recipes", self.args.target, "meta.yaml")
         logging.info(f"looking for {src}")
+        if not os.path.exists(src):
+            logging.error(f"bioconda repo {src} not found ...")
+            return False
+
         # read yaml lines as text ... strip out the {{ set whatevers
         with open(src) as file:
             lines = file.readlines()
@@ -46,6 +53,7 @@ class CondaGit(Flounder):
                 text = text + correct_set_line(line, substitutions)
         self.conda_yaml = yaml.load(text, Loader=yaml.BaseLoader)
         logging.info(self.conda_yaml)
+        return True
 
     def get_build_lines(self):
         build = os.path.join(self.args.bioconda, "recipes", self.args.target, "build.sh")
@@ -98,6 +106,9 @@ class RpmHandler(Flounder):
         self.conda = conda
         self.has_bin = False
         self.defined_vals = {"{CPU_COUNT}": "4", "SRC_DIR": "%{buildroot}"}
+        self.build_requires = []
+        self.run_requires = ["environment-modules"]
+        self.check_dependencies()
 
     def prepare_manifest(self):
 
@@ -141,28 +152,8 @@ class RpmHandler(Flounder):
             print("URL: "+self.conda.conda_yaml["about"]["home"], file=file)
             print("Source0: "+self.conda.conda_yaml["source"]["url"], file=file)
 
-            build_requires = []
-            for build in self.conda.conda_yaml["requirements"]["build"]:
-                if build in conda2rpm_mapping.keys():
-                    build = conda2rpm_mapping[build]
-                if build not in build_requires:
-                    build_requires.append(build)
-
-            for build in self.conda.conda_yaml["requirements"]["host"]:
-                if build in conda2rpm_mapping.keys():
-                    build = conda2rpm_mapping[build]
-                if build not in build_requires:
-                    build_requires.append(build)
-
-            run_requires = ["environment-modules"]
-            for build in self.conda.conda_yaml["requirements"]["run"]:
-                if build in conda2rpm_mapping.keys():
-                    build = conda2rpm_mapping[build]
-                if build not in run_requires:
-                    run_requires.append(build)
-
-            print("\nBuildRequires: "+" ".join(build_requires), file=file)
-            print("Requires: "+" ".join(run_requires), file=file)
+            print("\nBuildRequires: "+" ".join(self.build_requires), file=file)
+            print("Requires: "+" ".join(self.run_requires), file=file)
 
             print("\n%description\n"+self.conda.conda_yaml["about"]["summary"], file=file)
 
@@ -193,8 +184,48 @@ class RpmHandler(Flounder):
 
             print("\n%changelog", file=file)
 
-
         self.download_source()
+
+        sys.exit(0)
+
+
+    def check_dependencies(self):
+        if "build" in self.conda.conda_yaml["requirements"]:
+            for build in self.conda.conda_yaml["requirements"]["build"]:
+                if build in conda2rpm_mapping.keys():
+                    build = conda2rpm_mapping[build]
+                else:
+                    self.sanity_check_package(build)
+                if build not in self.build_requires:
+                    self.build_requires.append(build)
+
+        for build in self.conda.conda_yaml["requirements"]["host"]:
+            if build in conda2rpm_mapping.keys():
+                build = conda2rpm_mapping[build]
+            else:
+                self.sanity_check_package(build)
+            if build not in self.build_requires:
+                self.build_requires.append(build)
+
+        for build in self.conda.conda_yaml["requirements"]["run"]:
+            if build in conda2rpm_mapping.keys():
+                build = conda2rpm_mapping[build]
+            else:
+                self.sanity_check_package(build)
+            if build not in self.run_requires:
+                self.run_requires.append(build)
+
+    def sanity_check_package(self, package):
+        logging.info(f"dependency package [{package}] is not a default package")
+
+        newargs = copy.copy(self.args)
+        newargs.target = package
+
+        conda = CondaGit(newargs)
+        if conda.lookup():
+            rpm = RpmHandler(newargs, conda)
+            rpm.prepare_manifest()
+        sys.exit(0)
 
     def extract_configuration_cmds(self, fh):
         #print("=====")
@@ -289,7 +320,12 @@ class RpmHandler(Flounder):
 
 conda2rpm_mapping = {"{{ compiler('cxx') }}": "gcc",
                      "{{ compiler('c') }}": "gcc",
-                     "zlib": "zlib-devel", }
+                     "{{ compiler('go') }}": "go-toolset",
+                     "zlib": "zlib-devel",
+                     "perl": "perl",
+                     "gcc": "gcc",
+                     "bzip2": "bzip2-devel",
+                     "pcre": "pcre",}
 
 
 class SpecParser(Flounder):

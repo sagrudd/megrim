@@ -18,11 +18,9 @@ class Conda2Rpm(MegrimPlugin):
         os.environ["NUMEXPR_MAX_THREADS"] = str(multiprocessing.cpu_count())
 
         conda = CondaGit(args)
-        conda.lookup()
-        rpm = RpmHandler(args, conda)
-        rpm.prepare_manifest()
-
-
+        if conda.lookup():
+            rpm = RpmHandler(args, conda)
+            rpm.prepare_manifest()
 
     def arg_params(self, subparsers, parent_parser):
 
