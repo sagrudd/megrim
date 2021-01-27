@@ -9,7 +9,7 @@ Created on Thu Jan  2 16:52:28 2020
 from pysam import FastaFile
 import pyranges as pr
 import numpy as np
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from math import log10
 import pandas as pd
 import logging
