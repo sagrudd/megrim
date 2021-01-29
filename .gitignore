@@ -54,3 +54,4 @@ megrim/Tutorials/basic_qc/basic_qc_tutorial.html
 src/
 
 megrim/plugins/__pycache__/
+.Rproj.user
